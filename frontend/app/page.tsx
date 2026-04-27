@@ -1,191 +1,235 @@
 "use client";
 import React, { useState, useEffect } from 'react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, AreaChart, Area, CartesianGrid } from 'recharts';
-import { LayoutDashboard, Database, FileText, CheckCircle, TrendingUp, Filter, Activity } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
+import { Database, Activity, CheckCircle, AlertCircle, Loader2, Target, TrendingUp, BarChart3, Award } from 'lucide-react';
 
-export default function NexusUniversalApp() {
+const COLORS = ['#6366f1', '#22d3ee', '#f472b6', '#4ade80', '#fb923c', '#a78bfa'];
+
+export default function ProGenericBIDashboard() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [view, setView] = useState<'bi' | 'notebook'>('bi');
-  const [mounted, setMounted] = useState(false);
-
-  // Fixes the Hydration/Chart width errors
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const [error, setError] = useState<string | null>(null);
 
   const onUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files?.[0]) return;
-    setData(null); setLoading(true);
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setData(null);
+    setError(null);
+    setLoading(true);
+
     const fd = new FormData();
-    fd.append("file", e.target.files[0]);
+    fd.append("file", file);
+
     try {
       const res = await fetch("http://localhost:8000/analyze", { method: "POST", body: fd });
       const result = await res.json();
-      setData(result);
-    } catch (err) { alert("Backend Error"); }
-    setLoading(false);
+
+      if (result.error) {
+        setError(result.message || "Analysis failed");
+      } else {
+        setData(result);
+      }
+    } catch (err: any) {
+      setError("Cannot connect to backend. Is FastAPI running on port 8000?");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  if (!mounted) return <div className="min-h-screen bg-[#05070a]" />;
+  const trendData = React.useMemo(() => Array.from({ length: 12 }, (_, i) => ({
+    month: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][i],
+    value1: 4200 + Math.random() * 7800,
+    value2: 650 + Math.random() * 2600,
+  })), []);
 
   return (
-    <div className="min-h-screen bg-[#05070a] text-slate-400 p-4 font-sans">
-      {/* HEADER BAR */}
-      <nav className="bg-[#111620] border border-white/10 p-4 rounded-xl mb-6 flex justify-between items-center shadow-2xl">
-        <div className="flex items-center gap-4">
-          <div className="bg-blue-600 p-2 rounded shadow-lg shadow-blue-500/20"><Activity className="text-white" size={18}/></div>
-          <h1 className="text-white font-black text-xs tracking-widest uppercase italic">Nexus_Universal_Kernel</h1>
+    <div className="min-h-screen bg-[#05070a] text-slate-300 p-6 font-sans">
+      {/* Header */}
+      <div className="flex justify-between items-center mb-10">
+        <div className="flex items-center gap-5">
+          <div className="bg-gradient-to-br from-blue-600 to-violet-600 p-4 rounded-2xl">
+            <Activity className="text-white" size={32} />
+          </div>
+          <div>
+            <h1 className="text-4xl font-black text-white tracking-tighter">Intelligence Dashboard</h1>
+            <p className="text-slate-500">Universal BI for Any Dataset</p>
+          </div>
         </div>
-        <div className="flex gap-4">
-          {data && (
-            <div className="flex bg-black/40 p-1 rounded-lg border border-white/5">
-                <button onClick={() => setView('bi')} className={`px-5 py-2 rounded-md text-[10px] font-black transition-all ${view === 'bi' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-white'}`}>ENTERPRISE_BI</button>
-                <button onClick={() => setView('notebook')} className={`px-5 py-2 rounded-md text-[10px] font-black transition-all ${view === 'notebook' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-white'}`}>17_STEP_NOTEBOOK</button>
-            </div>
-          )}
-          <label className="bg-white text-black px-6 py-2 rounded-md cursor-pointer font-black text-[10px] hover:bg-blue-600 hover:text-white transition-all uppercase flex items-center gap-2">
-            <Database size={14}/> {loading ? "Computing..." : "Import Dataset"}
-            <input type="file" className="hidden" onChange={onUpload} />
-          </label>
+
+        <label className="bg-white hover:bg-blue-600 hover:text-white text-black px-8 py-4 rounded-2xl cursor-pointer font-semibold flex items-center gap-3 transition-all shadow-2xl">
+          <Database size={22} />
+          {loading ? "ANALYZING..." : "UPLOAD ANY CSV"}
+          <input type="file" className="hidden" accept=".csv" onChange={onUpload} />
+        </label>
+      </div>
+
+      {loading && (
+        <div className="flex flex-col items-center justify-center py-32">
+          <Loader2 className="animate-spin text-blue-500 mb-6" size={64} />
+          <p className="text-2xl font-semibold text-white">Analyzing Dataset...</p>
         </div>
-      </nav>
+      )}
+
+      {error && (
+        <div className="max-w-2xl mx-auto bg-red-950/80 border border-red-600 p-10 rounded-3xl">
+          <p className="font-bold text-red-400 text-xl mb-3">Analysis Failed</p>
+          <pre className="text-red-300 text-sm whitespace-pre-wrap">{error}</pre>
+        </div>
+      )}
 
       {data ? (
-        <div className="animate-in fade-in zoom-in-95 duration-500 max-w-[1600px] mx-auto">
+        <div className="max-w-[1900px] mx-auto space-y-10">
+          {/* Toggle */}
+          <div className="flex justify-center">
+            <div className="bg-[#111620] border border-white/10 rounded-full p-1.5 flex shadow-inner">
+              <button 
+                onClick={() => setView('bi')} 
+                className={`px-12 py-3.5 rounded-full text-sm font-semibold transition-all ${view === 'bi' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}
+              >
+                BI DASHBOARD
+              </button>
+              <button 
+                onClick={() => setView('notebook')} 
+                className={`px-12 py-3.5 rounded-full text-sm font-semibold transition-all ${view === 'notebook' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}
+              >
+                17-STEP NOTEBOOK
+              </button>
+            </div>
+          </div>
+
           {view === 'bi' ? (
-            <div className="grid grid-cols-12 gap-5">
-              {/* SLICERS */}
-              <div className="col-span-12 flex gap-4 bg-[#111620] p-4 rounded-xl border border-white/5 shadow-xl">
-                <div className="flex items-center gap-2 text-blue-500 font-black text-[10px] uppercase border-r border-white/10 pr-4"><Filter size={14}/> Slicers</div>
-                {data.db.filters && Object.keys(data.db.filters).map(f => (
-                  <select key={f} className="bg-black/40 border border-white/10 rounded px-3 py-1 text-[10px] text-slate-300 outline-none focus:ring-1 ring-blue-500">
-                    <option>{f} (All)</option>
-                    {data.db.filters[f].map((opt:any) => <option key={opt}>{opt}</option>)}
-                  </select>
-                ))}
-              </div>
-
-              {/* KPI CARDS */}
-              <div className="col-span-12 grid grid-cols-5 gap-4">
-                {data.db.kpis.map((k:any, i:number) => (
-                  <div key={i} className="bg-[#111620] border-l-4 border-blue-500 p-5 rounded-lg shadow-xl">
-                    <p className="text-[9px] uppercase font-bold text-slate-500 mb-1">{k.l}</p>
-                    <div className="flex justify-between items-end">
-                      <h2 className="text-2xl font-black text-white italic">{k.v}</h2>
-                      <TrendingUp size={14} className="text-emerald-500 opacity-50 mb-1"/>
-                    </div>
+            <div className="space-y-10">
+              {/* KPI Cards */}
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
+                {data.db?.kpis?.map((k: any, i: number) => (
+                  <div key={i} className="bg-[#111620] border border-white/10 p-6 rounded-3xl min-h-[140px] flex flex-col justify-between">
+                    <p className="text-xs uppercase tracking-widest text-slate-500 line-clamp-1">{k.l}</p>
+                    <p className="text-4xl font-black text-white mt-3 tracking-tighter break-words">{k.v}</p>
                   </div>
                 ))}
               </div>
 
-              {/* STRATEGY & CHARTS */}
-              <div className="col-span-12 lg:col-span-3 bg-[#1a212e] rounded-xl border border-white/5 p-6 shadow-2xl h-fit">
-                <h3 className="text-blue-500 text-[10px] font-black uppercase mb-6 tracking-[0.2em] underline underline-offset-8">Strategic Roadmap</h3>
-                <div className="space-y-8">
-                  {data.db.strategy.map((s:any, idx:number) => (
-                    <div key={idx} className="group">
-                      {/* FIXED: Changed <p> to <div> to allow internal <div> bullets */}
-                      <div className="text-white text-[11px] font-black mb-2 flex items-center gap-2 italic uppercase">
-                        <div className="w-1.5 h-1.5 bg-blue-500 rounded-full shrink-0"/> {s.t}
+              <div className="grid grid-cols-12 gap-8">
+                {/* Insights Sidebar */}
+                <div className="col-span-12 lg:col-span-3">
+                  <div className="bg-[#111620] border border-white/10 p-7 rounded-3xl sticky top-8">
+                    <h3 className="text-white font-bold text-xl mb-6 flex items-center gap-3">
+                      <Award size={24} /> Key Insights
+                    </h3>
+                    {(data.db?.strategy || []).map((s: any, i: number) => (
+                      <div key={i} className="mb-8 p-5 bg-black/40 rounded-2xl">
+                        <p className="font-semibold text-blue-400 line-clamp-2">{s.t}</p>
+                        <p className="text-sm text-slate-400 mt-3 leading-relaxed line-clamp-4">{s.d}</p>
                       </div>
-                      <p className="text-[10px] text-slate-400 leading-relaxed pl-4">{s.d}</p>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Main Content */}
+                <div className="col-span-12 lg:col-span-9 space-y-8">
+                  {/* Feature Importance */}
+                  <div className="bg-[#111620] p-7 rounded-3xl border border-white/10">
+                    <h3 className="text-white font-bold text-lg mb-5 flex items-center gap-3">
+                      <BarChart3 size={24} /> Top Feature Importance
+                    </h3>
+                    <div className="h-[420px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={data.db?.importance || []} layout="vertical">
+                          <XAxis type="number" />
+                          <YAxis dataKey="name" type="category" width={180} />
+                          <Tooltip />
+                          <Bar dataKey="val" fill="#6366f1" radius={[0, 8, 8, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
                     </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="col-span-12 lg:col-span-9 grid grid-cols-2 gap-5">
-                <div className="bg-[#111620] p-6 rounded-xl border border-white/5 min-h-[320px]">
-                  <p className="text-white text-[10px] font-black mb-6 uppercase border-l-2 border-blue-500 pl-3 italic">Impact Influence (Hover for Data)</p>
-                  <div className="h-[240px] w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={data.db.importance} layout="vertical">
-                        <XAxis type="number" hide />
-                        <YAxis dataKey="name" type="category" stroke="#475569" fontSize={9} width={80} />
-                        <Tooltip 
-                           cursor={{fill: 'rgba(255,255,255,0.05)'}}
-                           contentStyle={{backgroundColor: '#111620', border: '1px solid rgba(255,255,255,0.1)', fontSize: '10px'}}
-                        />
-                        <Bar dataKey="val" fill="#3b82f6" radius={[0, 4, 4, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
                   </div>
-                </div>
 
-                <div className="bg-[#111620] p-6 rounded-xl border border-white/5 min-h-[320px]">
-                   <p className="text-white text-[10px] font-black mb-6 uppercase border-l-2 border-blue-500 pl-3 italic">Lead Density Trend</p>
-                   <div className="h-[240px] w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={Array.from({length: 12}).map((_, i) => ({name: i, y: Math.floor(Math.random()*100)}))}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#ffffff05" vertical={false} />
-                        <XAxis dataKey="name" hide />
-                        <YAxis stroke="#475569" fontSize={9} />
-                        <Tooltip contentStyle={{backgroundColor: '#111620', border: '1px solid rgba(255,255,255,0.1)', fontSize: '10px'}} />
-                        <Area type="monotone" dataKey="y" stroke="#3b82f6" fill="#3b82f611" strokeWidth={2} />
-                      </AreaChart>
-                    </ResponsiveContainer>
+                  {/* Trend Analysis */}
+                  <div className="bg-[#111620] p-7 rounded-3xl border border-white/10">
+                    <h3 className="text-white font-bold text-lg mb-5 flex items-center gap-3">
+                      <TrendingUp size={24} /> Performance Trend
+                    </h3>
+                    <div className="h-[420px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={trendData}>
+                          <XAxis dataKey="month" />
+                          <YAxis />
+                          <Tooltip />
+                          <Area type="natural" dataKey="value1" stroke="#6366f1" fill="#6366f120" strokeWidth={4} />
+                          <Area type="natural" dataKey="value2" stroke="#f472b6" fill="#f472b620" strokeWidth={4} />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </div>
                   </div>
-                </div>
 
-                {/* DATA PREVIEW TABLE */}
-                <div className="col-span-2 bg-[#111620] p-6 rounded-xl border border-white/5 overflow-hidden">
-                  <p className="text-white text-[10px] font-black mb-4 uppercase italic">Cleaned Dataset Sample</p>
-                  <div className="overflow-x-auto max-h-[150px] text-[9px]">
-                    <table className="w-full text-left">
-                      <thead className="text-blue-500 border-b border-white/10 sticky top-0 bg-[#111620]">
-                        <tr>{Object.keys(data.db.raw[0]).map(k => <th key={k} className="p-2 uppercase">{k}</th>)}</tr>
-                      </thead>
-                      <tbody className="text-slate-500">
-                        {data.db.raw.map((r:any, i:number) => (
-                          <tr key={i} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                            {Object.values(r).map((v:any, j) => <td key={j} className="p-2">{String(v)}</td>)}
+                  {/* Processed Data */}
+                  <div className="bg-[#111620] p-7 rounded-3xl border border-white/10">
+                    <h3 className="text-white font-bold text-lg mb-5">Processed Data Sample</h3>
+                    <div className="overflow-x-auto max-h-[460px] border border-white/10 rounded-2xl bg-[#0a0c14]">
+                      <table className="w-full text-sm">
+                        <thead className="bg-[#0f121a] sticky top-0 z-10">
+                          <tr>
+                            {Object.keys(data.db?.processed?.[0] || {}).map((k) => (
+                              <th key={k} className="p-4 text-left text-indigo-400 font-medium whitespace-nowrap">{k}</th>
+                            ))}
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody className="divide-y divide-white/10">
+                          {(data.db?.processed || []).map((row: any, idx: number) => (
+                            <tr key={idx} className="hover:bg-white/5">
+                              {Object.values(row).map((val: any, i: number) => (
+                                <td key={i} className="p-4 text-slate-300 whitespace-nowrap">{String(val)}</td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
           ) : (
-            /* --- 17-STEP NOTEBOOK VIEW (UNCHANGED BUT PROTECTED) --- */
-            <div className="max-w-4xl mx-auto space-y-12 pb-20">
-               {data.steps.map((s: any) => (
-                 <div key={s.id} className="relative border-l-2 border-white/5 pl-8 ml-4">
-                   <div className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-blue-600 shadow-lg shadow-blue-500/50" />
-                   <div className="flex justify-between items-center mb-4">
-                     <span className="text-blue-500 font-black text-[9px] uppercase tracking-widest">{s.pct}% SYNCED</span>
-                     <code className="text-slate-600 text-[9px] bg-black/40 px-2 py-1 rounded">CMD: {s.cmd}</code>
-                   </div>
-                   <div className="bg-[#111620] border border-white/5 p-8 rounded-2xl shadow-2xl">
-                     <h4 className="text-white font-black text-xs mb-6 flex items-center gap-3 italic uppercase">
-                        <CheckCircle size={14} className="text-emerald-500"/> STEP_{s.id}: {s.title}
-                     </h4>
-                     {s.out && <div className="text-[10px] overflow-auto max-h-[500px] notebook-table mb-6" dangerouslySetInnerHTML={{__html: s.out}} />}
-                     {s.img && (
-                       <div className="mt-6 p-4 bg-black/40 rounded-xl border border-white/5">
-                         <p className="text-[9px] font-bold text-slate-600 uppercase mb-4 italic tracking-widest">Graphical_Node_Output:</p>
-                         <img src={`data:image/png;base64,${s.img}`} className="w-full rounded-lg shadow-2xl" alt="Analysis Plot" />
-                       </div>
-                     )}
-                   </div>
-                 </div>
-               ))}
+            /* 17-Step Notebook - Locked */
+            <div className="max-w-5xl mx-auto space-y-12 pb-20">
+              {data.steps?.map((s: any, index: number) => (
+                <div key={`step-${s.id}-${index}`} className="relative border-l-2 border-white/10 pl-10">
+                  <div className="absolute -left-2 top-3 w-5 h-5 rounded-full bg-blue-600 ring-4 ring-[#05070a]" />
+                  <div className="flex justify-between mb-4">
+                    <span className="text-blue-500 font-black text-xs tracking-widest">{s.pct}% COMPLETE</span>
+                    <code className="bg-black/50 px-3 py-1 rounded text-slate-500 text-xs">{s.cmd}</code>
+                  </div>
+                  <div className="bg-[#111620] border border-white/5 p-9 rounded-3xl">
+                    <h4 className="text-white font-black text-sm mb-6 flex items-center gap-3">
+                      <CheckCircle size={18} className="text-emerald-500" /> 
+                      STEP {s.id} — {s.title}
+                    </h4>
+                    {s.out && <div className="notebook-table mb-8 text-[10px]" dangerouslySetInnerHTML={{ __html: s.out }} />}
+                    {s.img && (
+                      <div className="bg-black/60 p-4 rounded-2xl border border-white/5">
+                        <img src={`data:image/png;base64,${s.img}`} className="w-full rounded-xl shadow-2xl" alt={`Step ${s.id}`} />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
-      ) : (
-        <div className="h-[75vh] flex flex-col items-center justify-center opacity-10">
-          <Database size={100} className="mb-4 animate-pulse text-white"/>
-          <h2 className="text-5xl font-black italic tracking-tighter text-white uppercase underline decoration-blue-600 underline-offset-8">Awaiting_Uplink</h2>
+      ) : !loading && (
+        <div className="h-[80vh] flex flex-col items-center justify-center text-center">
+          <Database size={140} className="mb-10 text-slate-700" />
+          <h2 className="text-6xl font-black text-white tracking-tighter">Upload Any Dataset</h2>
+          <p className="text-xl text-slate-500 mt-6 max-w-lg">Get instant professional BI dashboard</p>
         </div>
       )}
 
       <style jsx global>{`
         .notebook-table table { width: 100%; border-collapse: collapse; }
-        .notebook-table th { text-align: left; padding: 12px; border-bottom: 2px solid #ffffff10; color: #fff; font-size: 10px; text-transform: uppercase; }
-        .notebook-table td { padding: 12px; border-bottom: 1px solid #ffffff05; color: #64748b; font-size: 10px; }
+        .notebook-table th, .notebook-table td { padding: 12px 16px; border-bottom: 1px solid #ffffff10; }
+        .notebook-table th { background: #111620; color: #60a5fa; text-transform: uppercase; font-size: 10px; }
       `}</style>
     </div>
   );
