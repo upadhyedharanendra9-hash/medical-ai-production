@@ -9,14 +9,14 @@ from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from sklearn.preprocessing import LabelEncoder
 
-# --- KERNEL SETUP ---
+# --- KERNEL CONFIG ---
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("nexus_kernel")
 plt.switch_backend('Agg') 
 
 app = FastAPI()
 
-# CRITICAL: This allows different laptops (like Piyu's) to talk to your server
+# FIXED CORS: This allows external laptops to connect to your Render server
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -43,34 +43,43 @@ def get_b64():
 
 @app.get("/")
 async def root():
-    # THIS FIXES YOUR "NOT FOUND" ERROR
-    return {"status": "online", "message": "Nexus Kernel Handshake Verified"}
+    # This route fixes the "Not Found" error when visiting the URL directly
+    return {
+        "status": "online", 
+        "message": "Medical AI Production Kernel is Live",
+        "timestamp": time.ctime()
+    }
 
 @app.post("/analyze")
 async def analyze_pipeline(file: UploadFile = File(...)):
     user_logs = []
     def log_event(msg):
-        user_logs.append(f"[{time.strftime('%H:%M:%S')}] {msg}")
+        ts = time.strftime('%H:%M:%S')
+        user_logs.append(f"[{ts}] {msg}")
         logger.info(msg)
 
     try:
-        log_event(f"Node Ingesting: {file.filename}")
+        log_event(f"Kernel Ingesting: {file.filename}")
         content = await file.read()
         
-        # Load and Clean
+        # 1. Load Data
         df = pd.read_csv(io.BytesIO(content), sep=None, engine='python', on_bad_lines='skip')
-        log_event(f"Dataset active: {len(df)} rows found.")
+        log_event(f"Dataset active: {len(df)} rows.")
 
+        # 2. Logic Check
         target = df.columns[-1]
         is_cls = df[target].nunique() <= 10
         
-        # Visuals
+        # 3. Visualization
         plt.figure(figsize=(10,4))
-        sns.histplot(df[target], color='#3b82f6')
-        plt.title(f"Distribution of {target}")
+        if is_cls:
+            sns.countplot(x=df[target], palette='magma')
+        else:
+            sns.histplot(df[target], kde=True, color='#ef4444')
+        plt.title(f"Clinical Analysis: {target} Distribution")
         plot_b64 = get_b64()
 
-        # Training Engine
+        # 4. Processing & Training
         proc = df.copy().dropna()
         for col in proc.select_dtypes(include=['object']).columns:
             proc[col] = LabelEncoder().fit_transform(proc[col].astype(str))
@@ -81,16 +90,16 @@ async def analyze_pipeline(file: UploadFile = File(...)):
         model = RandomForestClassifier().fit(X_train, y_train) if is_cls else RandomForestRegressor().fit(X_train, y_train)
         score = model.score(X_test, y_test)
         
-        log_event("Success: Model weights optimized.")
+        log_event("Success: Machine Learning weights finalized.")
 
         return clean_json({
             "success": True, 
             "logs": user_logs,
             "db": {
                 "kpis": [
-                    {"l": "Rows", "v": len(df)}, 
-                    {"l": "Score", "v": f"{score:.2%}"},
-                    {"l": "Mode", "v": "Classifier" if is_cls else "Regressor"}
+                    {"l": "Total Records", "v": len(df)}, 
+                    {"l": "Accuracy Score", "v": f"{score:.2%}"},
+                    {"l": "Target Variable", "v": target}
                 ],
                 "importance": sorted([{"name": c, "val": float(v)} for c, v in zip(X.columns, model.feature_importances_)], key=lambda x: x['val'], reverse=True)[:5]
             },
@@ -103,6 +112,6 @@ async def analyze_pipeline(file: UploadFile = File(...)):
 
 if __name__ == "__main__":
     import uvicorn
-    # Important: Render provides the port. Defaulting to 8000 for local testing.
+    # Dynamic port binding for Render
     port = int(os.environ.get("PORT", 8000))
     uvicorn.run(app, host="0.0.0.0", port=port)
