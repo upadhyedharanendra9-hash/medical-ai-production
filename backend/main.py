@@ -16,12 +16,12 @@ plt.switch_backend('Agg')
 
 app = FastAPI()
 
-# THIS IS CRITICAL FOR YOUR FRIEND'S LAPTOP TO CONNECT
+# CRITICAL: This allows different laptops (like Piyu's) to talk to your server
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -43,37 +43,34 @@ def get_b64():
 
 @app.get("/")
 async def root():
-    # This fixes the "Not Found" error when visiting the URL directly
-    return {"status": "online", "message": "Nexus Kernel is Live", "node": "Render-Cloud"}
+    # THIS FIXES YOUR "NOT FOUND" ERROR
+    return {"status": "online", "message": "Nexus Kernel Handshake Verified"}
 
 @app.post("/analyze")
 async def analyze_pipeline(file: UploadFile = File(...)):
     user_logs = []
-    steps = []
-    
     def log_event(msg):
-        ts = time.strftime('%H:%M:%S')
-        user_logs.append(f"[{ts}] {msg}")
+        user_logs.append(f"[{time.strftime('%H:%M:%S')}] {msg}")
         logger.info(msg)
 
     try:
-        log_event(f"Ingesting: {file.filename}")
+        log_event(f"Node Ingesting: {file.filename}")
         content = await file.read()
         
-        # 1. Load
+        # Load and Clean
         df = pd.read_csv(io.BytesIO(content), sep=None, engine='python', on_bad_lines='skip')
-        steps.append({"id": 1, "title": "Ingestion", "cmd": "pd.read_csv", "out": f"Loaded {len(df)} rows.", "pct": 25})
+        log_event(f"Dataset active: {len(df)} rows found.")
 
-        # 2. Target Logic
         target = df.columns[-1]
         is_cls = df[target].nunique() <= 10
         
-        # 3. Plot
-        plt.figure(figsize=(8,4))
-        sns.histplot(df[target], color='#2563eb')
-        steps.append({"id": 2, "title": "Analytics", "cmd": "sns.plot", "img": get_b64(), "pct": 60})
+        # Visuals
+        plt.figure(figsize=(10,4))
+        sns.histplot(df[target], color='#3b82f6')
+        plt.title(f"Distribution of {target}")
+        plot_b64 = get_b64()
 
-        # 4. Training
+        # Training Engine
         proc = df.copy().dropna()
         for col in proc.select_dtypes(include=['object']).columns:
             proc[col] = LabelEncoder().fit_transform(proc[col].astype(str))
@@ -84,15 +81,20 @@ async def analyze_pipeline(file: UploadFile = File(...)):
         model = RandomForestClassifier().fit(X_train, y_train) if is_cls else RandomForestRegressor().fit(X_train, y_train)
         score = model.score(X_test, y_test)
         
-        log_event("Analysis Complete.")
-        steps.append({"id": 3, "title": "Export", "cmd": "RF.fit", "out": f"Accuracy: {score:.2%}", "pct": 100})
+        log_event("Success: Model weights optimized.")
 
         return clean_json({
-            "success": True, "steps": steps, "logs": user_logs,
+            "success": True, 
+            "logs": user_logs,
             "db": {
-                "kpis": [{"l": "Rows", "v": len(df)}, {"l": "Score", "v": f"{score:.2%}"}],
+                "kpis": [
+                    {"l": "Rows", "v": len(df)}, 
+                    {"l": "Score", "v": f"{score:.2%}"},
+                    {"l": "Mode", "v": "Classifier" if is_cls else "Regressor"}
+                ],
                 "importance": sorted([{"name": c, "val": float(v)} for c, v in zip(X.columns, model.feature_importances_)], key=lambda x: x['val'], reverse=True)[:5]
-            }
+            },
+            "img": plot_b64
         })
 
     except Exception as e:
@@ -101,5 +103,6 @@ async def analyze_pipeline(file: UploadFile = File(...)):
 
 if __name__ == "__main__":
     import uvicorn
-    # Render assigns the PORT automatically
-    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 8000)))
+    # Important: Render provides the port. Defaulting to 8000 for local testing.
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
