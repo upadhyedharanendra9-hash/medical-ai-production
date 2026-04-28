@@ -6,6 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import logging
+import gc # Garbage collection
 from fastapi import FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from sklearn.model_selection import train_test_split
@@ -16,6 +17,7 @@ from sklearn.metrics import accuracy_score, r2_score
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("nexus_kernel")
 
+# Use Agg backend for thread-safe, non-GUI rendering
 plt.switch_backend('Agg')
 
 app = FastAPI(title="Nexus Universal Kernel")
@@ -31,32 +33,38 @@ def clean_json(obj):
     return obj
 
 def get_b64():
+    """Captures current plot and explicitly clears it to free memory."""
     buf = io.BytesIO()
     plt.savefig(buf, format='png', bbox_inches='tight', dpi=120)
-    plt.close()
+    plt.close() # Close current figure
     return base64.b64encode(buf.getvalue()).decode('utf-8')
 
 @app.post("/analyze")
 async def universal_master_pipeline(file: UploadFile = File(...)):
+    # 1. KILL RESIDUAL DATA & PLOTS IMMEDIATELY
+    plt.close('all') 
+    gc.collect() 
+    
     steps = []
     try:
         content = await file.read()
         filename = file.filename.lower()
 
-        # --- FIX FOR 0xff / ENCODING ISSUES ---
+        # --- RE-INITIALIZE DATASET ---
+        df = None
+
         if filename.endswith(('.xlsx', '.xls')):
             df = pd.read_excel(io.BytesIO(content))
         else:
-            # Try multiple encodings to prevent the '0xff' start byte error
             for enc in ['utf-8', 'utf-16', 'cp1252', 'latin1']:
                 try:
                     df = pd.read_csv(io.BytesIO(content), sep=None, engine='python', encoding=enc, on_bad_lines='skip')
-                    logger.info(f"Loaded with {enc}")
+                    logger.info(f"Session started with {enc}")
                     break
                 except:
                     continue
         
-        if 'df' not in locals():
+        if df is None:
             raise ValueError("File format not supported or encoding corrupted.")
 
         def record(sid: int, title: str, cmd: str, out=None, img=None):
@@ -66,11 +74,11 @@ async def universal_master_pipeline(file: UploadFile = File(...)):
                 "cmd": cmd,
                 "out": out,
                 "img": img,
-                "pct": int((sid / 18) * 100) # Updated to 18 total steps
+                "pct": int((sid / 18) * 100) 
             })
 
         # --- STEP 1-4: INGESTION ---
-        record(1, "Kernel Boot", "sys.init()", "Universal Logic Locked.")
+        record(1, "Kernel Boot", "sys.init()", "Universal Logic Locked. Previous session cleared.")
         record(2, "Data Ingestion", "pd.read_csv()", df.head(5).to_html(classes='p-table'))
         record(3, "Schema Discovery", "df.info()", f"{df.shape[0]:,} rows × {df.shape[1]} columns")
         record(4, "Integrity Audit", "df.isnull().sum()", df.isnull().sum().to_frame(name='Missing').to_html(classes='p-table'))
@@ -83,8 +91,10 @@ async def universal_master_pipeline(file: UploadFile = File(...)):
         record(5, "Target Identification", f"Target = '{target}'", f"Mode: {'Classification' if is_classification else 'Regression'}")
         
         plt.figure(figsize=(10, 4))
-        if is_classification: sns.countplot(x=y_series, palette='Blues')
-        else: sns.histplot(y_series, kde=True)
+        if is_classification: 
+            sns.countplot(x=y_series, palette='Blues')
+        else: 
+            sns.histplot(y_series, kde=True)
         record(6, "Target Distribution", "sns.plot()", img=get_b64())
 
         # --- STEP 7-8: STATS ---
@@ -92,13 +102,15 @@ async def universal_master_pipeline(file: UploadFile = File(...)):
         
         plt.figure(figsize=(10, 6))
         num_only = df.select_dtypes(include=[np.number])
-        if not num_only.empty: sns.heatmap(num_only.corr(), cmap='Blues')
+        if not num_only.empty: 
+            sns.heatmap(num_only.corr(), cmap='Blues', annot=False)
         record(8, "Correlation Matrix", "sns.heatmap()", img=get_b64())
 
         # --- STEP 9-11: CLEANING ---
         proc_df = df.copy()
         num_cols = proc_df.select_dtypes(include=[np.number]).columns.tolist()
         cat_cols = proc_df.select_dtypes(exclude=[np.number]).columns.tolist()
+        
         proc_df[num_cols] = proc_df[num_cols].fillna(proc_df[num_cols].median())
         proc_df[cat_cols] = proc_df[cat_cols].fillna("Missing")
         record(9, "Imputation", "df.fillna()", "Nulls replaced with Median/Mode.")
@@ -111,12 +123,13 @@ async def universal_master_pipeline(file: UploadFile = File(...)):
             proc_df[num_cols] = StandardScaler().fit_transform(proc_df[num_cols])
         record(11, "Feature Scaling", "StandardScaler()", "Numerical variance normalized.")
 
-        # --- STEP 12: OUTLIER ANALYSIS (Fixed Skip) ---
+        # --- STEP 12: OUTLIER ANALYSIS ---
         plt.figure(figsize=(10, 4))
-        if num_cols: proc_df[num_cols[:min(5, len(num_cols))]].boxplot()
+        if num_cols: 
+            proc_df[num_cols[:min(5, len(num_cols))]].boxplot()
         record(12, "Outlier Analysis", "plt.boxplot()", "Visualizing top 5 numerical features.", img=get_b64())
 
-        # --- STEP 13: PARTITIONING (Fixed Skip) ---
+        # --- STEP 13: PARTITIONING ---
         X = proc_df.drop(columns=[target])
         y = y_series if is_classification else proc_df[target]
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
@@ -124,31 +137,33 @@ async def universal_master_pipeline(file: UploadFile = File(...)):
 
         # --- STEP 14-16: MODELING ---
         if is_classification:
-            model = RandomForestClassifier(n_estimators=100).fit(X_train, y_train)
+            model = RandomForestClassifier(n_estimators=100, random_state=42).fit(X_train, y_train)
             score = model.score(X_test, y_test)
             metric = "Accuracy"
         else:
-            model = RandomForestRegressor(n_estimators=100).fit(X_train, y_train)
+            model = RandomForestRegressor(n_estimators=100, random_state=42).fit(X_train, y_train)
             score = r2_score(y_test, model.predict(X_test))
             metric = "R2 Score"
         
         record(14, "Model Training", "RandomForest.fit()", f"Engineered {metric}: {score:.4f}")
 
         plt.figure(figsize=(10, 4))
-        plt.scatter(y_test, model.predict(X_test), alpha=0.5)
+        plt.scatter(y_test, model.predict(X_test), alpha=0.5, color='#3b82f6')
+        plt.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], 'r--')
         record(15, "Validation Plot", "Actual vs Predicted", img=get_b64())
         record(16, "Hyper-Benchmarking", "model.evaluate()", f"Final Optimized {metric}: {score:.4f}")
 
-        # --- STEP 17: FEATURE IMPORTANCE (Fixed ID collision) ---
+        # --- STEP 17: FEATURE IMPORTANCE ---
         imp = sorted([{"name": col, "val": float(val)} for col, val in zip(X.columns, model.feature_importances_)], key=lambda x: x['val'], reverse=True)[:10]
         plt.figure(figsize=(10, 5))
         sns.barplot(x=[i['val'] for i in imp], y=[i['name'] for i in imp], palette='Blues_r')
         record(17, "Feature Importance", "Top 10 Drivers", img=get_b64())
 
         # --- STEP 18: EXPORT ---
-        record(18, "Kernel Export", "proc_df.to_dict()", "Data pipeline complete. Dashboard generated.")
+        record(18, "Kernel Export", "proc_df.to_dict()", "Data pipeline complete. Session finalized.")
 
-        return clean_json({
+        # FINAL RESPONSE
+        response_data = clean_json({
             "steps": steps,
             "db": {
                 "kpis": [
@@ -163,6 +178,13 @@ async def universal_master_pipeline(file: UploadFile = File(...)):
             }
         })
 
+        # WIPE MEMORY AGAIN BEFORE RETURNING
+        del df, proc_df, X_train, X_test, y_train, y_test, model
+        gc.collect()
+
+        return response_data
+
     except Exception as e:
+        plt.close('all') # Ensure no orphaned plots on error
         logger.error(traceback.format_exc())
         return {"error": True, "message": str(e), "trace": traceback.format_exc()}
