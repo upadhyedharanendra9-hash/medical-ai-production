@@ -53,7 +53,7 @@ export default function ProGenericBIDashboard() {
             <Activity className="text-white" size={32} />
           </div>
           <div>
-            <h1 className="text-4xl font-black text-white tracking-tighter">AI Intelligence Dashboard</h1>
+            <h1 className="text-4xl font-black text-white tracking-tighter"> Intelligence Dashboard</h1>
             <p className="text-slate-500">Universal BI for Any Dataset</p>
           </div>
         </div>
