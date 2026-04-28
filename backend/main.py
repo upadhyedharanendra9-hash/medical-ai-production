@@ -1,37 +1,28 @@
-import io
-import base64
-import traceback
+import io, base64, traceback, logging, gc, os, time
+from fastapi import FastAPI, File, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-import logging
-import gc 
-import os
-import time
-from fastapi import FastAPI, File, UploadFile
-from fastapi.middleware.cors import CORSMiddleware
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
-from sklearn.preprocessing import LabelEncoder, StandardScaler
-from sklearn.metrics import accuracy_score, r2_score
+from sklearn.preprocessing import LabelEncoder
 
-# --- LOGGING SETUP ---
+# --- KERNEL CONFIG ---
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("nexus_kernel")
+plt.switch_backend('Agg') # Thread-safe for cloud servers
 
-# Use Agg backend for thread-safe, non-GUI rendering
-plt.switch_backend('Agg')
+app = FastAPI()
 
-app = FastAPI(title="Nexus Universal Kernel")
-
-# CRITICAL: Allow Render's domain and local testing
+# CRITICAL: This allows your frontend to communicate with Render
 app.add_middleware(
-    CORSMiddleware, 
-    allow_origins=["*"], 
+    CORSMiddleware,
+    allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["*"], 
-    allow_headers=["*"]
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 def clean_json(obj):
@@ -40,111 +31,89 @@ def clean_json(obj):
     elif isinstance(obj, (np.integer, np.int64, np.int32)): return int(obj)
     elif isinstance(obj, (np.floating, np.float64, np.float32)): 
         return 0.0 if np.isnan(obj) or np.isinf(obj) else float(obj)
-    elif pd.isna(obj): return None
     return obj
 
 def get_b64():
     buf = io.BytesIO()
-    plt.savefig(buf, format='png', bbox_inches='tight', dpi=120)
-    plt.close('all') 
+    plt.savefig(buf, format='png', bbox_inches='tight', dpi=100)
+    plt.close('all')
     return base64.b64encode(buf.getvalue()).decode('utf-8')
 
-@app.get("/health")
-async def health():
-    return {"status": "online", "timestamp": time.ctime()}
+@app.get("/")
+async def health_check():
+    return {"status": "Kernel Online", "node": "Render-Production"}
 
 @app.post("/analyze")
-async def universal_master_pipeline(file: UploadFile = File(...)):
-    plt.close('all') 
-    gc.collect() 
-    
-    steps = []
+async def analyze_pipeline(file: UploadFile = File(...)):
     user_logs = []
+    steps = []
     
-    def log_it(msg, level="INFO"):
+    def log_event(msg):
         ts = time.strftime('%H:%M:%S')
-        full_msg = f"[{ts}] {msg}"
-        user_logs.append(full_msg)
-        if level == "ERROR": logger.error(msg)
-        else: logger.info(msg)
+        user_logs.append(f"[{ts}] {msg}")
+        logger.info(msg)
 
     try:
+        log_event(f"Node Ingesting: {file.filename}")
         content = await file.read()
-        filename = file.filename.lower()
-        log_it(f"Kernel received: {filename}")
-
-        # --- DATA INGESTION ---
-        df = None
-        if filename.endswith(('.xlsx', '.xls')):
-            df = pd.read_excel(io.BytesIO(content))
-        else:
-            for enc in ['utf-8', 'cp1252', 'latin1']:
-                try:
-                    df = pd.read_csv(io.BytesIO(content), sep=None, engine='python', encoding=enc, on_bad_lines='skip')
-                    log_it(f"Parsed with {enc} encoding")
-                    break
-                except: continue
         
-        if df is None: raise ValueError("Unsupported file or corrupted encoding.")
+        # 1. Load Data
+        df = pd.read_csv(io.BytesIO(content), sep=None, engine='python', on_bad_lines='skip')
+        steps.append({"id": 1, "title": "Data Ingestion", "cmd": "pd.read_csv()", "out": df.head(3).to_html(), "pct": 20})
+        log_event(f"Success: {len(df)} rows loaded.")
 
-        def record(sid, title, cmd, out=None, img=None):
-            steps.append({"id": sid, "title": title, "cmd": cmd, "out": out, "img": img, "pct": int((sid / 18) * 100)})
-
-        # Steps 1-4
-        record(1, "Kernel Boot", "sys.init()", "Logic Locked.")
-        record(2, "Data Ingestion", "pd.read_csv()", df.head(3).to_html(classes='p-table'))
-        record(3, "Schema Discovery", "df.info()", f"{df.shape[0]} rows found.")
-        record(4, "Integrity Audit", "df.isnull()", "Checked for missing values.")
-
-        # Steps 5-8
+        # 2. Setup Target
         target = df.columns[-1]
-        is_classification = df[target].nunique() <= 10
-        log_it(f"Target: {target} | Mode: {'Class' if is_classification else 'Reg'}")
-        
-        plt.figure(figsize=(10, 4))
-        sns.histplot(df[target]) if not is_classification else sns.countplot(x=df[target])
-        record(6, "Distribution", "plt.show()", img=get_b64())
+        is_cls = df[target].nunique() <= 10
+        log_event(f"Target logic set to: {'Classification' if is_cls else 'Regression'}")
 
-        # Steps 9-13 (Processing)
-        proc_df = df.copy().dropna()
-        for col in proc_df.select_dtypes(include=['object']).columns:
-            proc_df[col] = LabelEncoder().fit_transform(proc_df[col].astype(str))
+        # 3. Visualization
+        plt.figure(figsize=(8,4))
+        if is_cls: sns.countplot(x=df[target], palette='viridis')
+        else: sns.histplot(df[target], kde=True)
+        steps.append({"id": 2, "title": "Target Analysis", "cmd": "sns.plot()", "img": get_b64(), "pct": 50})
+
+        # 4. Preprocessing & Training
+        proc = df.copy().dropna()
+        for col in proc.select_dtypes(include=['object']).columns:
+            proc[col] = LabelEncoder().fit_transform(proc[col].astype(str))
         
-        X = proc_df.drop(columns=[target])
-        y = proc_df[target]
+        X = proc.drop(columns=[target])
+        y = proc[target]
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
-        record(13, "Partitioning", "split()", "80/20 train-test split created.")
-
-        # Steps 14-18 (Modeling)
-        model = RandomForestClassifier().fit(X_train, y_train) if is_classification else RandomForestRegressor().fit(X_train, y_train)
-        score = model.score(X_test, y_test)
-        record(14, "Training", "RF.fit()", f"Score: {score:.4f}")
         
-        imp = sorted([{"name": col, "val": float(val)} for col, val in zip(X.columns, model.feature_importances_)], key=lambda x: x['val'], reverse=True)[:10]
-        record(17, "Importance", "Top Drivers", out=f"Main: {imp[0]['name']}")
-        record(18, "Export", "Done", "Pipeline finalized.")
+        model = RandomForestClassifier().fit(X_train, y_train) if is_cls else RandomForestRegressor().fit(X_train, y_train)
+        score = model.score(X_test, y_test)
+        
+        log_event("Random Forest training complete.")
+        steps.append({"id": 3, "title": "Model Export", "cmd": "RF.fit()", "out": f"Final Score: {score:.4f}", "pct": 100})
 
-        log_it("Success: Full analysis complete.")
-
+        # Memory Cleanup
+        gc.collect()
+        
         return clean_json({
+            "success": True,
             "steps": steps,
             "logs": user_logs,
             "db": {
-                "kpis": [{"l": "Rows", "v": len(df)}, {"l": "Score", "v": f"{score:.2%}"}, {"l": "Target", "v": target}],
-                "importance": imp,
-                "processed": proc_df.head(5).to_dict(orient='records')
+                "kpis": [{"l": "Rows", "v": len(df)}, {"l": "Features", "v": len(df.columns)}, {"l": "Score", "v": f"{score:.2%}"}],
+                "importance": sorted([{"name": c, "val": float(v)} for c, v in zip(X.columns, model.feature_importances_)], key=lambda x: x['val'], reverse=True)[:5]
             }
         })
 
     except Exception as e:
-        err_trace = traceback.format_exc()
-        log_it(f"CRASH: {str(e)}", "ERROR")
-        with open("crash_log.txt", "a") as f:
-            f.write(f"\n{time.ctime()}: {err_trace}")
-        return {"error": True, "message": str(e), "trace": err_trace, "logs": user_logs}
+        err_msg = str(e)
+        full_trace = traceback.format_exc()
+        log_event(f"CRITICAL ERROR: {err_msg}")
+        
+        # Save crash to server for you to check
+        with open("backend_crash.log", "a") as f:
+            f.write(f"\n--- {time.ctime()} ---\n{full_trace}\n")
+            
+        return {"error": True, "message": err_msg, "logs": user_logs, "trace": full_trace}
 
 if __name__ == "__main__":
     import uvicorn
-    # Render uses the PORT environment variable
+    # Important: Render provides the port via environment variables
     port = int(os.environ.get("PORT", 8000))
     uvicorn.run(app, host="0.0.0.0", port=port)
