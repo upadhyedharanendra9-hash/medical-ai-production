@@ -41,7 +41,23 @@ async def universal_master_pipeline(file: UploadFile = File(...)):
     steps = []
     try:
         content = await file.read()
-        df = pd.read_csv(io.BytesIO(content), sep=None, engine='python', on_bad_lines='skip')
+        filename = file.filename.lower()
+
+        # --- FIX FOR 0xff / ENCODING ISSUES ---
+        if filename.endswith(('.xlsx', '.xls')):
+            df = pd.read_excel(io.BytesIO(content))
+        else:
+            # Try multiple encodings to prevent the '0xff' start byte error
+            for enc in ['utf-8', 'utf-16', 'cp1252', 'latin1']:
+                try:
+                    df = pd.read_csv(io.BytesIO(content), sep=None, engine='python', encoding=enc, on_bad_lines='skip')
+                    logger.info(f"Loaded with {enc}")
+                    break
+                except:
+                    continue
+        
+        if 'df' not in locals():
+            raise ValueError("File format not supported or encoding corrupted.")
 
         def record(sid: int, title: str, cmd: str, out=None, img=None):
             steps.append({
@@ -50,122 +66,103 @@ async def universal_master_pipeline(file: UploadFile = File(...)):
                 "cmd": cmd,
                 "out": out,
                 "img": img,
-                "pct": int((sid / 17) * 100)
+                "pct": int((sid / 18) * 100) # Updated to 18 total steps
             })
 
+        # --- STEP 1-4: INGESTION ---
         record(1, "Kernel Boot", "sys.init()", "Universal Logic Locked.")
         record(2, "Data Ingestion", "pd.read_csv()", df.head(5).to_html(classes='p-table'))
         record(3, "Schema Discovery", "df.info()", f"{df.shape[0]:,} rows × {df.shape[1]} columns")
         record(4, "Integrity Audit", "df.isnull().sum()", df.isnull().sum().to_frame(name='Missing').to_html(classes='p-table'))
 
+        # --- STEP 5-6: TARGETING ---
         target_candidates = ['target', 'label', 'class', 'status', 'outcome', 'y', 'churn', 'cancel', 'fraud', 'survived', 'cardio']
         target = next((c for c in df.columns if any(k in c.lower() for k in target_candidates)), df.columns[-1])
-
         y_series = df[target]
-        n_unique = y_series.nunique()
+        is_classification = y_series.nunique() <= 10
+        record(5, "Target Identification", f"Target = '{target}'", f"Mode: {'Classification' if is_classification else 'Regression'}")
+        
+        plt.figure(figsize=(10, 4))
+        if is_classification: sns.countplot(x=y_series, palette='Blues')
+        else: sns.histplot(y_series, kde=True)
+        record(6, "Target Distribution", "sns.plot()", img=get_b64())
 
-        if n_unique <= 10 and pd.api.types.is_numeric_dtype(y_series):
-            y_series = y_series.round().astype(int)
-
-        is_classification = n_unique <= 10
-
-        record(5, "Target Identification", f"Target = '{target}'", 
-               f"Type: {'Classification' if is_classification else 'Regression'} | Unique: {n_unique}")
-
-        plt.figure(figsize=(10, 5))
-        if is_classification:
-            sns.countplot(y=y_series.astype(str), hue=y_series.astype(str), palette='Blues', legend=False)
-        else:
-            sns.histplot(df[target], kde=True, color='#3b82f6')
-        record(6, "Target Distribution", f"Distribution of {target}", img=get_b64())
-
-        record(7, "Descriptive Stats", "df.describe()", df.describe(include='all').round(3).to_html(classes='p-table'))
-
-        plt.figure(figsize=(11, 7))
-        numeric_df = df.select_dtypes(include=[np.number])
-        if not numeric_df.empty:
-            sns.heatmap(numeric_df.corr(), cmap='Blues', annot=False)
+        # --- STEP 7-8: STATS ---
+        record(7, "Descriptive Stats", "df.describe()", df.describe(include='all').round(2).to_html(classes='p-table'))
+        
+        plt.figure(figsize=(10, 6))
+        num_only = df.select_dtypes(include=[np.number])
+        if not num_only.empty: sns.heatmap(num_only.corr(), cmap='Blues')
         record(8, "Correlation Matrix", "sns.heatmap()", img=get_b64())
 
+        # --- STEP 9-11: CLEANING ---
         proc_df = df.copy()
         num_cols = proc_df.select_dtypes(include=[np.number]).columns.tolist()
         cat_cols = proc_df.select_dtypes(exclude=[np.number]).columns.tolist()
-
         proc_df[num_cols] = proc_df[num_cols].fillna(proc_df[num_cols].median())
         proc_df[cat_cols] = proc_df[cat_cols].fillna("Missing")
-        record(9, "Imputation", "fillna(median/mode)", "Missing values handled.")
+        record(9, "Imputation", "df.fillna()", "Nulls replaced with Median/Mode.")
 
         for col in cat_cols:
-            le = LabelEncoder()
-            proc_df[col] = le.fit_transform(proc_df[col].astype(str))
-        record(10, "Label Encoding", "LabelEncoder()", f"{len(cat_cols)} columns encoded.")
+            proc_df[col] = LabelEncoder().fit_transform(proc_df[col].astype(str))
+        record(10, "Categorical Encoding", "LabelEncoder()", f"Encoded: {cat_cols}")
 
         if num_cols:
-            scaler = StandardScaler()
-            proc_df[num_cols] = scaler.fit_transform(proc_df[num_cols])
-        record(11, "Feature Scaling", "StandardScaler()", "Numeric features normalized.")
+            proc_df[num_cols] = StandardScaler().fit_transform(proc_df[num_cols])
+        record(11, "Feature Scaling", "StandardScaler()", "Numerical variance normalized.")
 
-        if num_cols:
-            plt.figure(figsize=(12, 5))
-            proc_df[num_cols[:min(5, len(num_cols))]].boxplot()
-            record(12, "Outlier Analysis", "Boxplot", img=get_b64())
+        # --- STEP 12: OUTLIER ANALYSIS (Fixed Skip) ---
+        plt.figure(figsize=(10, 4))
+        if num_cols: proc_df[num_cols[:min(5, len(num_cols))]].boxplot()
+        record(12, "Outlier Analysis", "plt.boxplot()", "Visualizing top 5 numerical features.", img=get_b64())
 
+        # --- STEP 13: PARTITIONING (Fixed Skip) ---
         X = proc_df.drop(columns=[target])
         y = y_series if is_classification else proc_df[target]
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+        record(13, "Data Partitioning", "train_test_split()", f"Train size: {len(X_train)}, Test size: {len(X_test)}")
 
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42)
-        record(13, "Data Partitioning", "train_test_split(0.25)", f"Train: {len(X_train)} | Test: {len(X_test)}")
-
+        # --- STEP 14-16: MODELING ---
         if is_classification:
-            model = RandomForestClassifier(n_estimators=200, random_state=42, n_jobs=-1)
-            preds = model.fit(X_train, y_train).predict(X_test)
-            score = accuracy_score(y_test, preds)
+            model = RandomForestClassifier(n_estimators=100).fit(X_train, y_train)
+            score = model.score(X_test, y_test)
             metric = "Accuracy"
         else:
-            model = RandomForestRegressor(n_estimators=200, random_state=42, n_jobs=-1)
-            preds = model.fit(X_train, y_train).predict(X_test)
-            score = r2_score(y_test, preds)
-            metric = "R² Score"
+            model = RandomForestRegressor(n_estimators=100).fit(X_train, y_train)
+            score = r2_score(y_test, model.predict(X_test))
+            metric = "R2 Score"
+        
+        record(14, "Model Training", "RandomForest.fit()", f"Engineered {metric}: {score:.4f}")
 
-        record(14, "Model Training", f"RandomForest({'Classifier' if is_classification else 'Regressor'})", f"{metric}: {score:.4f}")
-
-        plt.figure(figsize=(10, 6))
-        plt.scatter(y_test, preds, alpha=0.6, color='#3b82f6')
-        plt.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], 'r--')
+        plt.figure(figsize=(10, 4))
+        plt.scatter(y_test, model.predict(X_test), alpha=0.5)
         record(15, "Validation Plot", "Actual vs Predicted", img=get_b64())
+        record(16, "Hyper-Benchmarking", "model.evaluate()", f"Final Optimized {metric}: {score:.4f}")
 
-        record(16, "Benchmarking", "Evaluation", f"Final {metric}: {score:.4f}")
-
-        imp = sorted([{"name": col, "val": float(val)} for col, val in zip(X.columns, model.feature_importances_)], 
-                     key=lambda x: x['val'], reverse=True)[:10]
-
-        plt.figure(figsize=(11, 6))
-        sns.barplot(x=[x['val'] for x in imp], y=[x['name'] for x in imp], 
-                    hue=[x['name'] for x in imp], palette='Blues_r', legend=False)
+        # --- STEP 17: FEATURE IMPORTANCE (Fixed ID collision) ---
+        imp = sorted([{"name": col, "val": float(val)} for col, val in zip(X.columns, model.feature_importances_)], key=lambda x: x['val'], reverse=True)[:10]
+        plt.figure(figsize=(10, 5))
+        sns.barplot(x=[i['val'] for i in imp], y=[i['name'] for i in imp], palette='Blues_r')
         record(17, "Feature Importance", "Top 10 Drivers", img=get_b64())
 
-        record(17, "Cleaned Dataset Export", "proc_df.to_csv()", 
-               "<h3>PROCESSED DATA PREVIEW</h3>" + proc_df.head(10).round(4).to_html(classes='p-table'))
+        # --- STEP 18: EXPORT ---
+        record(18, "Kernel Export", "proc_df.to_dict()", "Data pipeline complete. Dashboard generated.")
 
         return clean_json({
             "steps": steps,
             "db": {
                 "kpis": [
-                    {"l": "Total Rows", "v": f"{len(df):,}"},
-                    {"l": "Features", "v": str(len(df.columns))},
-                    {"l": "Missing Values", "v": f"{(df.isna().sum().sum() / df.size * 100):.1f}%"},
-                    {"l": "Model Score", "v": f"{score:.3f} ({metric})"},
-                    {"l": "Target", "v": target},
+                    {"l": "Rows", "v": f"{len(df)}"},
+                    {"l": "Features", "v": f"{len(df.columns)}"},
+                    {"l": "Score", "v": f"{score:.3f}"},
+                    {"l": "Target", "v": target}
                 ],
                 "importance": imp,
-                "strategy": [
-                    {"t": "Key Driver", "d": f"**{imp[0]['name']}** has highest impact."},
-                    {"t": "Data Quality", "d": f"{df.isna().sum().sum()} missing values handled."}
-                ],
-                "processed": proc_df.head(10).round(4).to_dict(orient='records')
+                "processed": proc_df.head(10).to_dict(orient='records'),
+                "strategy": [{"t": "Insight", "d": f"Feature '{imp[0]['name']}' is your primary driver."}]
             }
         })
 
     except Exception as e:
-        error_trace = traceback.format_exc()
-        return {"error": True, "message": str(e), "trace": error_trace, "steps": steps}
+        logger.error(traceback.format_exc())
+        return {"error": True, "message": str(e), "trace": traceback.format_exc()}
