@@ -9,7 +9,6 @@ export default function ProGenericBIDashboard() {
   const [view, setView] = useState<'bi' | 'notebook'>('bi');
   const [error, setError] = useState<string | null>(null);
 
-  // Live Render URL
   const BACKEND_URL = "https://medical-ai-production-jjxr.onrender.com";
 
   const onUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -24,11 +23,7 @@ export default function ProGenericBIDashboard() {
     fd.append("file", file);
 
     try {
-      const res = await fetch(`${BACKEND_URL}/analyze`, { 
-        method: "POST", 
-        body: fd 
-      });
-
+      const res = await fetch(`${BACKEND_URL}/analyze`, { method: "POST", body: fd });
       const result = await res.json();
 
       if (result.error) {
