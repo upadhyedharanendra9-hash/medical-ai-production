@@ -46,7 +46,7 @@ export default function ProGenericBIDashboard() {
   };
 
   const getBusinessTheme = (type: string = 'general') => {
-    const themes = {
+    const themes: Record<string, any> = {
       retail: {
         color: '#f59e0b',
         icon: ShoppingCart,
@@ -78,7 +78,9 @@ export default function ProGenericBIDashboard() {
         accent: 'indigo'
       }
     };
-    return themes[type.toLowerCase()] || themes.general;
+
+    const lowerType = type.toLowerCase();
+    return themes[lowerType] || themes.general;
   };
 
   const onUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -108,7 +110,7 @@ export default function ProGenericBIDashboard() {
         addLog(`Backend Error: ${result.message}`);
       } else {
         setData(result);
-        addLog(`Analysis completed successfully. Business Type: ${result.db?.business_type || 'general'}`);
+        addLog(`Analysis completed. Business Type: ${result.db?.business_type || 'general'}`);
       }
     } catch (err: any) {
       setError(`Connection failed: ${err.message}`);
@@ -155,7 +157,7 @@ export default function ProGenericBIDashboard() {
       {logs.length > 0 && (
         <div className="mb-8 bg-black/70 border border-white/10 p-5 rounded-3xl max-h-80 overflow-auto font-mono text-xs">
           <p className="text-blue-400 font-bold mb-2">LIVE ANALYSIS LOGS</p>
-          {logs.map((log, i) => <div key={i} className="mb-1">{log}</div>)}
+          {logs.map((log, i) => <div key={i} className="mb-1 break-all">{log}</div>)}
         </div>
       )}
 
@@ -194,10 +196,9 @@ export default function ProGenericBIDashboard() {
 
           {view === 'bi' ? (
             <div className="space-y-10">
-              {/* KPI Cards */}
               <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
                 {data.db?.kpis?.map((k: any, i: number) => (
-                  <div key={i} className="bg-[#111620] border border-white/10 p-6 rounded-3xl min-h-[130px]">
+                  <div key={i} className="bg-[#111620] border border-white/10 p-6 rounded-3xl min-h-[130px] flex flex-col justify-between">
                     <p className="text-xs uppercase tracking-widest text-slate-500">{k.l}</p>
                     <p className="text-4xl font-black text-white mt-3 tracking-tighter">{k.v}</p>
                   </div>
@@ -205,7 +206,6 @@ export default function ProGenericBIDashboard() {
               </div>
 
               <div className="grid grid-cols-12 gap-8">
-                {/* Insights Sidebar */}
                 <div className="col-span-12 lg:col-span-3">
                   <div className="bg-[#111620] border border-white/10 p-7 rounded-3xl sticky top-8">
                     <h3 className="text-white font-bold text-xl mb-6 flex items-center gap-3">
@@ -220,7 +220,6 @@ export default function ProGenericBIDashboard() {
                   </div>
                 </div>
 
-                {/* Main Charts */}
                 <div className="col-span-12 lg:col-span-9 space-y-8">
                   <div className="bg-[#111620] p-7 rounded-3xl border border-white/10">
                     <h3 className="text-white font-bold text-lg mb-5 flex items-center gap-3">
@@ -244,7 +243,10 @@ export default function ProGenericBIDashboard() {
                     </h3>
                     <div className="h-[420px]">
                       <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={Array.from({ length: 12 }, (_, i) => ({ month: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][i], value: 4000 + Math.random()*7000 }))}>
+                        <AreaChart data={Array.from({ length: 12 }, (_, i) => ({ 
+                          month: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][i], 
+                          value: 4000 + Math.random()*7000 
+                        }))}>
                           <XAxis dataKey="month" />
                           <YAxis />
                           <Tooltip />
@@ -257,7 +259,10 @@ export default function ProGenericBIDashboard() {
                   <div className="bg-[#111620] p-7 rounded-3xl border border-white/10">
                     <div className="flex justify-between items-center mb-5">
                       <h3 className="text-white font-bold text-lg">Processed Data Sample</h3>
-                      <button onClick={downloadCleanedData} className="bg-emerald-600 hover:bg-emerald-700 px-6 py-2.5 rounded-xl text-sm flex items-center gap-2">
+                      <button 
+                        onClick={downloadCleanedData} 
+                        className="bg-emerald-600 hover:bg-emerald-700 px-6 py-2.5 rounded-xl text-sm flex items-center gap-2"
+                      >
                         <Download size={18} /> Download Full CSV
                       </button>
                     </div>
@@ -286,7 +291,6 @@ export default function ProGenericBIDashboard() {
               </div>
             </div>
           ) : (
-            /* Notebook View */
             <div className="max-w-5xl mx-auto space-y-12 pb-20">
               {data.steps?.map((s: any, index: number) => (
                 <div key={`step-${s.id}-${index}`} className="relative border-l-2 border-white/10 pl-10">
