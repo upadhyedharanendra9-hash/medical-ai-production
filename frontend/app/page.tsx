@@ -47,40 +47,13 @@ export default function ProGenericBIDashboard() {
 
   const getBusinessTheme = (type: string = 'general') => {
     const themes: Record<string, any> = {
-      retail: {
-        color: '#f59e0b',
-        icon: ShoppingCart,
-        title: 'Retail Sales Intelligence',
-        accent: 'amber'
-      },
-      healthcare: {
-        color: '#ef4444',
-        icon: Heart,
-        title: 'Healthcare Analytics Dashboard',
-        accent: 'rose'
-      },
-      saas: {
-        color: '#3b82f6',
-        icon: Users,
-        title: 'SaaS Performance Dashboard',
-        accent: 'blue'
-      },
-      ecommerce: {
-        color: '#8b5cf6',
-        icon: ShoppingCart,
-        title: 'E-commerce Intelligence',
-        accent: 'violet'
-      },
-      general: {
-        color: '#6366f1',
-        icon: Briefcase,
-        title: 'Business Intelligence Dashboard',
-        accent: 'indigo'
-      }
+      retail: { color: '#f59e0b', icon: ShoppingCart, title: 'Retail Sales Intelligence' },
+      healthcare: { color: '#ef4444', icon: Heart, title: 'Healthcare Analytics Dashboard' },
+      saas: { color: '#3b82f6', icon: Users, title: 'SaaS Performance Dashboard' },
+      ecommerce: { color: '#8b5cf6', icon: ShoppingCart, title: 'E-commerce Intelligence' },
+      general: { color: '#6366f1', icon: Briefcase, title: 'Business Intelligence Dashboard' }
     };
-
-    const lowerType = type.toLowerCase();
-    return themes[lowerType] || themes.general;
+    return themes[type.toLowerCase()] || themes.general;
   };
 
   const onUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -98,23 +71,17 @@ export default function ProGenericBIDashboard() {
     fd.append("file", file);
 
     try {
-      addLog(`Sending request to: ${BACKEND_URL}/analyze`);
       const res = await fetch(`${BACKEND_URL}/analyze`, { method: "POST", body: fd });
-      addLog(`Response status: ${res.status}`);
-
       const result = await res.json();
-      addLog("Response parsed successfully");
 
       if (result.error) {
         setError(result.message || "Analysis failed");
-        addLog(`Backend Error: ${result.message}`);
       } else {
         setData(result);
         addLog(`Analysis completed. Business Type: ${result.db?.business_type || 'general'}`);
       }
     } catch (err: any) {
       setError(`Connection failed: ${err.message}`);
-      addLog(`Frontend Connection Error: ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -124,7 +91,7 @@ export default function ProGenericBIDashboard() {
 
   return (
     <div className="min-h-screen bg-[#05070a] text-slate-300 p-6 font-sans">
-      {/* Dynamic Header */}
+      {/* Header */}
       <div className="flex justify-between items-center mb-10">
         <div className="flex items-center gap-5">
           <div className={`p-4 rounded-2xl bg-gradient-to-br from-[${theme.color}] to-violet-600`}>
@@ -132,20 +99,20 @@ export default function ProGenericBIDashboard() {
           </div>
           <div>
             <h1 className="text-4xl font-black text-white tracking-tighter">{theme.title}</h1>
-            <p className="text-slate-500">Dynamic Business Intelligence • Powered by Nexus</p>
+            <p className="text-slate-500">Dynamic Business Intelligence Dashboard</p>
           </div>
         </div>
 
         <div className="flex gap-3">
-          <button onClick={downloadLogs} className="bg-white/10 hover:bg-white/20 px-6 py-3 rounded-2xl flex items-center gap-2 transition-all">
+          <button onClick={downloadLogs} className="bg-white/10 hover:bg-white/20 px-6 py-3 rounded-2xl flex items-center gap-2">
             <Download size={20} /> Logs
           </button>
           {data && (
-            <button onClick={downloadCleanedData} className="bg-emerald-600 hover:bg-emerald-700 px-6 py-3 rounded-2xl flex items-center gap-2 font-medium">
-              <Download size={20} /> Download Cleaned Data
+            <button onClick={downloadCleanedData} className="bg-emerald-600 hover:bg-emerald-700 px-6 py-3 rounded-2xl flex items-center gap-2">
+              <Download size={20} /> Download Cleaned CSV
             </button>
           )}
-          <label className="bg-white hover:bg-blue-600 hover:text-white text-black px-8 py-4 rounded-2xl cursor-pointer font-semibold flex items-center gap-3 transition-all shadow-2xl">
+          <label className="bg-white hover:bg-blue-600 hover:text-white text-black px-8 py-4 rounded-2xl cursor-pointer font-semibold flex items-center gap-3">
             <Database size={22} />
             {loading ? "ANALYZING..." : "UPLOAD CSV"}
             <input type="file" className="hidden" accept=".csv" onChange={onUpload} />
@@ -179,52 +146,41 @@ export default function ProGenericBIDashboard() {
         <div className="max-w-[1900px] mx-auto space-y-10">
           <div className="flex justify-center">
             <div className="bg-[#111620] border border-white/10 rounded-full p-1.5 flex shadow-inner">
-              <button 
-                onClick={() => setView('bi')} 
-                className={`px-14 py-3.5 rounded-full font-semibold transition-all ${view === 'bi' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}
-              >
-                BI DASHBOARD
-              </button>
-              <button 
-                onClick={() => setView('notebook')} 
-                className={`px-14 py-3.5 rounded-full font-semibold transition-all ${view === 'notebook' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}
-              >
-                17-STEP NOTEBOOK
-              </button>
+              <button onClick={() => setView('bi')} className={`px-14 py-3.5 rounded-full font-semibold transition-all ${view === 'bi' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}>BI DASHBOARD</button>
+              <button onClick={() => setView('notebook')} className={`px-14 py-3.5 rounded-full font-semibold transition-all ${view === 'notebook' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}>17-STEP NOTEBOOK</button>
             </div>
           </div>
 
           {view === 'bi' ? (
             <div className="space-y-10">
+              {/* KPI Cards */}
               <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
                 {data.db?.kpis?.map((k: any, i: number) => (
-                  <div key={i} className="bg-[#111620] border border-white/10 p-6 rounded-3xl min-h-[130px] flex flex-col justify-between">
-                    <p className="text-xs uppercase tracking-widest text-slate-500">{k.l}</p>
-                    <p className="text-4xl font-black text-white mt-3 tracking-tighter">{k.v}</p>
+                  <div key={i} className="bg-[#111620] border border-white/10 p-6 rounded-3xl min-h-[130px]">
+                    <p className="text-xs uppercase text-slate-500">{k.l}</p>
+                    <p className="text-4xl font-black text-white mt-2">{k.v}</p>
                   </div>
                 ))}
               </div>
 
+              {/* Feature Importance + Trend + Processed Data */}
               <div className="grid grid-cols-12 gap-8">
                 <div className="col-span-12 lg:col-span-3">
                   <div className="bg-[#111620] border border-white/10 p-7 rounded-3xl sticky top-8">
-                    <h3 className="text-white font-bold text-xl mb-6 flex items-center gap-3">
-                      <Award size={24} /> Key Business Insights
-                    </h3>
+                    <h3 className="text-white font-bold text-xl mb-6 flex items-center gap-3"><Award size={24} /> Key Insights</h3>
                     {(data.db?.strategy || []).map((s: any, i: number) => (
                       <div key={i} className="mb-8 p-5 bg-black/40 rounded-2xl">
                         <p className="font-semibold text-blue-400">{s.t}</p>
-                        <p className="text-sm text-slate-400 mt-3 leading-relaxed">{s.d}</p>
+                        <p className="text-sm text-slate-400 mt-3">{s.d}</p>
                       </div>
                     ))}
                   </div>
                 </div>
 
                 <div className="col-span-12 lg:col-span-9 space-y-8">
+                  {/* Feature Importance */}
                   <div className="bg-[#111620] p-7 rounded-3xl border border-white/10">
-                    <h3 className="text-white font-bold text-lg mb-5 flex items-center gap-3">
-                      <BarChart3 size={24} /> Top Feature Importance
-                    </h3>
+                    <h3 className="text-white font-bold text-lg mb-5 flex items-center gap-3"><BarChart3 size={24} /> Top Feature Importance</h3>
                     <div className="h-[420px]">
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={data.db?.importance || []} layout="vertical">
@@ -237,16 +193,12 @@ export default function ProGenericBIDashboard() {
                     </div>
                   </div>
 
+                  {/* Trend */}
                   <div className="bg-[#111620] p-7 rounded-3xl border border-white/10">
-                    <h3 className="text-white font-bold text-lg mb-5 flex items-center gap-3">
-                      <TrendingUp size={24} /> Performance Trend
-                    </h3>
+                    <h3 className="text-white font-bold text-lg mb-5 flex items-center gap-3"><TrendingUp size={24} /> Performance Trend</h3>
                     <div className="h-[420px]">
                       <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={Array.from({ length: 12 }, (_, i) => ({ 
-                          month: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][i], 
-                          value: 4000 + Math.random()*7000 
-                        }))}>
+                        <AreaChart data={Array.from({ length: 12 }, (_, i) => ({ month: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][i], value: 4000 + Math.random()*7000 }))}>
                           <XAxis dataKey="month" />
                           <YAxis />
                           <Tooltip />
@@ -256,22 +208,20 @@ export default function ProGenericBIDashboard() {
                     </div>
                   </div>
 
+                  {/* Processed Data with Download */}
                   <div className="bg-[#111620] p-7 rounded-3xl border border-white/10">
-                    <div className="flex justify-between items-center mb-5">
+                    <div className="flex justify-between mb-5">
                       <h3 className="text-white font-bold text-lg">Processed Data Sample</h3>
-                      <button 
-                        onClick={downloadCleanedData} 
-                        className="bg-emerald-600 hover:bg-emerald-700 px-6 py-2.5 rounded-xl text-sm flex items-center gap-2"
-                      >
-                        <Download size={18} /> Download Full CSV
+                      <button onClick={downloadCleanedData} className="bg-emerald-600 hover:bg-emerald-700 px-6 py-2.5 rounded-xl text-sm flex items-center gap-2">
+                        <Download size={18} /> Download CSV
                       </button>
                     </div>
-                    <div className="overflow-x-auto max-h-[460px] border border-white/10 rounded-2xl bg-[#0a0c14]">
+                    <div className="overflow-x-auto max-h-[500px] border border-white/10 rounded-2xl bg-[#0a0c14]">
                       <table className="w-full text-sm">
                         <thead className="bg-[#0f121a] sticky top-0 z-10">
                           <tr>
                             {Object.keys(data.db?.processed?.[0] || {}).map((k) => (
-                              <th key={k} className="p-4 text-left text-indigo-400 font-medium whitespace-nowrap">{k}</th>
+                              <th key={k} className="p-4 text-left text-indigo-400 font-medium">{k}</th>
                             ))}
                           </tr>
                         </thead>
@@ -279,7 +229,7 @@ export default function ProGenericBIDashboard() {
                           {(data.db?.processed || []).map((row: any, idx: number) => (
                             <tr key={idx} className="hover:bg-white/5">
                               {Object.values(row).map((val: any, i: number) => (
-                                <td key={i} className="p-4 text-slate-300 whitespace-nowrap">{String(val)}</td>
+                                <td key={i} className="p-4 text-slate-300">{String(val)}</td>
                               ))}
                             </tr>
                           ))}
@@ -291,6 +241,7 @@ export default function ProGenericBIDashboard() {
               </div>
             </div>
           ) : (
+            /* 17-STEP NOTEBOOK - Improved Table Styling */
             <div className="max-w-5xl mx-auto space-y-12 pb-20">
               {data.steps?.map((s: any, index: number) => (
                 <div key={`step-${s.id}-${index}`} className="relative border-l-2 border-white/10 pl-10">
@@ -304,9 +255,16 @@ export default function ProGenericBIDashboard() {
                       <CheckCircle size={18} className="text-emerald-500" /> 
                       STEP {s.id} — {s.title}
                     </h4>
-                    {s.out && <div className="notebook-table mb-8 text-[11px]" dangerouslySetInnerHTML={{ __html: s.out }} />}
+                    
+                    {s.out && (
+                      <div 
+                        className="notebook-table mb-8 text-sm overflow-auto" 
+                        dangerouslySetInnerHTML={{ __html: s.out }} 
+                      />
+                    )}
+
                     {s.img && (
-                      <div className="bg-black/60 p-4 rounded-2xl border border-white/5">
+                      <div className="bg-black/60 p-4 rounded-2xl border border-white/5 mt-6">
                         <img src={`data:image/png;base64,${s.img}`} className="w-full rounded-xl shadow-2xl" alt={`Step ${s.id}`} />
                       </div>
                     )}
@@ -325,6 +283,39 @@ export default function ProGenericBIDashboard() {
           <p className="text-xl text-slate-500 mt-6 max-w-lg">Get dynamic business intelligence dashboard</p>
         </div>
       )}
+
+      <style jsx global>{`
+        .notebook-table table {
+          width: 100%;
+          border-collapse: collapse;
+          background: #0a0c14;
+          border-radius: 12px;
+          overflow: hidden;
+        }
+        .notebook-table th, .notebook-table td {
+          padding: 14px 16px;
+          text-align: left;
+          border-bottom: 1px solid #ffffff15;
+        }
+        .notebook-table th {
+          background: #111620;
+          color: #60a5fa;
+          font-weight: 600;
+          text-transform: uppercase;
+          font-size: 10px;
+          letter-spacing: 0.5px;
+        }
+        .notebook-table tr:hover {
+          background: #1a1f2e;
+        }
+        .notebook-table td {
+          color: #cbd5e1;
+          font-size: 13px;
+        }
+        .clean-table th {
+          background: #1e2937 !important;
+        }
+      `}</style>
     </div>
   );
 }
