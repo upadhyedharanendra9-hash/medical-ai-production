@@ -1,7 +1,7 @@
 "use client";
 import React, { useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
-import { Database, Activity, CheckCircle, Loader2, Award, BarChart3, TrendingUp, Download } from 'lucide-react';
+import { Database, Activity, CheckCircle, Loader2, Award, BarChart3, TrendingUp, Download, Heart, ShoppingCart, Users, Briefcase } from 'lucide-react';
 
 export default function ProGenericBIDashboard() {
   const [data, setData] = useState<any>(null);
@@ -14,9 +14,8 @@ export default function ProGenericBIDashboard() {
 
   const addLog = (message: string) => {
     const timestamp = new Date().toLocaleTimeString();
-    const logEntry = `[${timestamp}] ${message}`;
-    setLogs(prev => [...prev, logEntry]);
-    console.log(logEntry);
+    setLogs(prev => [...prev, `[${timestamp}] ${message}`]);
+    console.log(`[LOG] ${message}`);
   };
 
   const downloadLogs = () => {
@@ -30,7 +29,56 @@ export default function ProGenericBIDashboard() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    addLog("Logs downloaded successfully");
+  };
+
+  const downloadCleanedData = () => {
+    if (!data?.db?.cleaned_csv) return;
+    const blob = new Blob([data.db.cleaned_csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'cleaned_dataset.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    addLog("Cleaned dataset downloaded");
+  };
+
+  const getBusinessTheme = (type: string = 'general') => {
+    const themes = {
+      retail: {
+        color: '#f59e0b',
+        icon: ShoppingCart,
+        title: 'Retail Sales Intelligence',
+        accent: 'amber'
+      },
+      healthcare: {
+        color: '#ef4444',
+        icon: Heart,
+        title: 'Healthcare Analytics Dashboard',
+        accent: 'rose'
+      },
+      saas: {
+        color: '#3b82f6',
+        icon: Users,
+        title: 'SaaS Performance Dashboard',
+        accent: 'blue'
+      },
+      ecommerce: {
+        color: '#8b5cf6',
+        icon: ShoppingCart,
+        title: 'E-commerce Intelligence',
+        accent: 'violet'
+      },
+      general: {
+        color: '#6366f1',
+        icon: Briefcase,
+        title: 'Business Intelligence Dashboard',
+        accent: 'indigo'
+      }
+    };
+    return themes[type.toLowerCase()] || themes.general;
   };
 
   const onUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -42,75 +90,62 @@ export default function ProGenericBIDashboard() {
     setLogs([]);
     setLoading(true);
 
-    addLog(`Starting analysis for file: ${file.name} (${(file.size/1024).toFixed(1)} KB)`);
-    addLog(`Backend URL: ${BACKEND_URL}`);
+    addLog(`Starting analysis for: ${file.name}`);
 
     const fd = new FormData();
     fd.append("file", file);
 
     try {
-      addLog("Sending request to backend...");
-      
-      const res = await fetch(`${BACKEND_URL}/analyze`, { 
-        method: "POST", 
-        body: fd 
-      });
-
-      addLog(`Response received - Status: ${res.status} ${res.statusText}`);
+      addLog(`Sending request to: ${BACKEND_URL}/analyze`);
+      const res = await fetch(`${BACKEND_URL}/analyze`, { method: "POST", body: fd });
+      addLog(`Response status: ${res.status}`);
 
       const result = await res.json();
-      addLog("Response JSON parsed successfully");
+      addLog("Response parsed successfully");
 
       if (result.error) {
-        addLog(`ERROR from backend: ${result.message}`);
-        setError(result.message || "Analysis failed on backend");
-        if (result.trace) console.error("Backend Trace:", result.trace);
+        setError(result.message || "Analysis failed");
+        addLog(`Backend Error: ${result.message}`);
       } else {
-        addLog("Analysis completed successfully ✓");
         setData(result);
+        addLog(`Analysis completed successfully. Business Type: ${result.db?.business_type || 'general'}`);
       }
     } catch (err: any) {
-      const errorMsg = err.message || String(err);
-      addLog(`CONNECTION ERROR: ${errorMsg}`);
-      setError(`Failed to connect to backend.\nURL: ${BACKEND_URL}\nError: ${errorMsg}`);
-      console.error("Full frontend error:", err);
+      setError(`Connection failed: ${err.message}`);
+      addLog(`Frontend Connection Error: ${err.message}`);
     } finally {
       setLoading(false);
-      addLog("Request process finished");
     }
   };
 
-  const trendData = React.useMemo(() => Array.from({ length: 12 }, (_, i) => ({
-    month: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][i],
-    value1: 4200 + Math.random() * 7800,
-    value2: 650 + Math.random() * 2600,
-  })), []);
+  const theme = data?.db?.business_type ? getBusinessTheme(data.db.business_type) : getBusinessTheme();
 
   return (
     <div className="min-h-screen bg-[#05070a] text-slate-300 p-6 font-sans">
+      {/* Dynamic Header */}
       <div className="flex justify-between items-center mb-10">
         <div className="flex items-center gap-5">
-          <div className="bg-gradient-to-br from-blue-600 to-violet-600 p-4 rounded-2xl">
-            <Activity className="text-white" size={32} />
+          <div className={`p-4 rounded-2xl bg-gradient-to-br from-[${theme.color}] to-violet-600`}>
+            <theme.icon className="text-white" size={34} />
           </div>
           <div>
-            <h1 className="text-4xl font-black text-white tracking-tighter">Intelligence Dashboard</h1>
-            <p className="text-slate-500">Universal BI • Any Dataset</p>
+            <h1 className="text-4xl font-black text-white tracking-tighter">{theme.title}</h1>
+            <p className="text-slate-500">Dynamic Business Intelligence • Powered by Nexus</p>
           </div>
         </div>
 
         <div className="flex gap-3">
-          <button 
-            onClick={downloadLogs}
-            disabled={logs.length === 0}
-            className="bg-white/10 hover:bg-white/20 text-white px-6 py-3 rounded-2xl flex items-center gap-2 transition-all disabled:opacity-50"
-          >
-            <Download size={20} /> Download Logs
+          <button onClick={downloadLogs} className="bg-white/10 hover:bg-white/20 px-6 py-3 rounded-2xl flex items-center gap-2 transition-all">
+            <Download size={20} /> Logs
           </button>
-
+          {data && (
+            <button onClick={downloadCleanedData} className="bg-emerald-600 hover:bg-emerald-700 px-6 py-3 rounded-2xl flex items-center gap-2 font-medium">
+              <Download size={20} /> Download Cleaned Data
+            </button>
+          )}
           <label className="bg-white hover:bg-blue-600 hover:text-white text-black px-8 py-4 rounded-2xl cursor-pointer font-semibold flex items-center gap-3 transition-all shadow-2xl">
             <Database size={22} />
-            {loading ? "ANALYZING..." : "UPLOAD ANY CSV"}
+            {loading ? "ANALYZING..." : "UPLOAD CSV"}
             <input type="file" className="hidden" accept=".csv" onChange={onUpload} />
           </label>
         </div>
@@ -118,45 +153,39 @@ export default function ProGenericBIDashboard() {
 
       {/* Live Logs */}
       {logs.length > 0 && (
-        <div className="mb-8 bg-black/70 border border-white/10 p-5 rounded-3xl max-h-80 overflow-auto font-mono text-sm">
-          <div className="flex justify-between mb-3 sticky top-0 bg-black/70 py-2">
-            <p className="text-blue-400 font-semibold">LIVE ANALYSIS LOGS</p>
-            <p className="text-xs text-slate-500">{logs.length} entries</p>
-          </div>
-          {logs.map((log, i) => (
-            <div key={i} className="text-slate-400 mb-1 break-all">{log}</div>
-          ))}
+        <div className="mb-8 bg-black/70 border border-white/10 p-5 rounded-3xl max-h-80 overflow-auto font-mono text-xs">
+          <p className="text-blue-400 font-bold mb-2">LIVE ANALYSIS LOGS</p>
+          {logs.map((log, i) => <div key={i} className="mb-1">{log}</div>)}
         </div>
       )}
 
       {loading && (
         <div className="flex flex-col items-center justify-center py-32">
           <Loader2 className="animate-spin text-blue-500 mb-6" size={64} />
-          <p className="text-2xl font-semibold text-white">Analyzing Dataset...</p>
+          <p className="text-2xl font-semibold text-white">Analyzing your dataset...</p>
         </div>
       )}
 
       {error && (
         <div className="max-w-3xl mx-auto bg-red-950/80 border border-red-600 p-10 rounded-3xl">
-          <p className="font-bold text-red-400 text-xl mb-4">Analysis Failed</p>
-          <pre className="text-red-300 text-sm whitespace-pre-wrap font-mono">{error}</pre>
+          <p className="font-bold text-red-400 text-xl mb-3">Analysis Failed</p>
+          <pre className="text-red-300 whitespace-pre-wrap">{error}</pre>
         </div>
       )}
 
       {data && (
         <div className="max-w-[1900px] mx-auto space-y-10">
-          {/* Toggle */}
           <div className="flex justify-center">
             <div className="bg-[#111620] border border-white/10 rounded-full p-1.5 flex shadow-inner">
               <button 
                 onClick={() => setView('bi')} 
-                className={`px-12 py-3.5 rounded-full text-sm font-semibold transition-all ${view === 'bi' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                className={`px-14 py-3.5 rounded-full font-semibold transition-all ${view === 'bi' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}
               >
                 BI DASHBOARD
               </button>
               <button 
                 onClick={() => setView('notebook')} 
-                className={`px-12 py-3.5 rounded-full text-sm font-semibold transition-all ${view === 'notebook' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                className={`px-14 py-3.5 rounded-full font-semibold transition-all ${view === 'notebook' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}
               >
                 17-STEP NOTEBOOK
               </button>
@@ -168,9 +197,9 @@ export default function ProGenericBIDashboard() {
               {/* KPI Cards */}
               <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
                 {data.db?.kpis?.map((k: any, i: number) => (
-                  <div key={i} className="bg-[#111620] border border-white/10 p-6 rounded-3xl min-h-[130px] flex flex-col justify-between">
-                    <p className="text-xs uppercase tracking-widest text-slate-500 line-clamp-2">{k.l}</p>
-                    <p className="text-4xl font-black text-white mt-3 tracking-tighter break-words">{k.v}</p>
+                  <div key={i} className="bg-[#111620] border border-white/10 p-6 rounded-3xl min-h-[130px]">
+                    <p className="text-xs uppercase tracking-widest text-slate-500">{k.l}</p>
+                    <p className="text-4xl font-black text-white mt-3 tracking-tighter">{k.v}</p>
                   </div>
                 ))}
               </div>
@@ -180,20 +209,19 @@ export default function ProGenericBIDashboard() {
                 <div className="col-span-12 lg:col-span-3">
                   <div className="bg-[#111620] border border-white/10 p-7 rounded-3xl sticky top-8">
                     <h3 className="text-white font-bold text-xl mb-6 flex items-center gap-3">
-                      <Award size={24} /> Key Insights
+                      <Award size={24} /> Key Business Insights
                     </h3>
                     {(data.db?.strategy || []).map((s: any, i: number) => (
                       <div key={i} className="mb-8 p-5 bg-black/40 rounded-2xl">
-                        <p className="font-semibold text-blue-400 line-clamp-2">{s.t}</p>
-                        <p className="text-sm text-slate-400 mt-3 leading-relaxed line-clamp-4">{s.d}</p>
+                        <p className="font-semibold text-blue-400">{s.t}</p>
+                        <p className="text-sm text-slate-400 mt-3 leading-relaxed">{s.d}</p>
                       </div>
                     ))}
                   </div>
                 </div>
 
-                {/* Main Content */}
+                {/* Main Charts */}
                 <div className="col-span-12 lg:col-span-9 space-y-8">
-                  {/* Feature Importance */}
                   <div className="bg-[#111620] p-7 rounded-3xl border border-white/10">
                     <h3 className="text-white font-bold text-lg mb-5 flex items-center gap-3">
                       <BarChart3 size={24} /> Top Feature Importance
@@ -204,33 +232,35 @@ export default function ProGenericBIDashboard() {
                           <XAxis type="number" />
                           <YAxis dataKey="name" type="category" width={180} />
                           <Tooltip />
-                          <Bar dataKey="val" fill="#6366f1" radius={[0, 8, 8, 0]} />
+                          <Bar dataKey="val" fill={theme.color} radius={[0, 8, 8, 0]} />
                         </BarChart>
                       </ResponsiveContainer>
                     </div>
                   </div>
 
-                  {/* Trend Analysis */}
                   <div className="bg-[#111620] p-7 rounded-3xl border border-white/10">
                     <h3 className="text-white font-bold text-lg mb-5 flex items-center gap-3">
                       <TrendingUp size={24} /> Performance Trend
                     </h3>
                     <div className="h-[420px]">
                       <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={trendData}>
+                        <AreaChart data={Array.from({ length: 12 }, (_, i) => ({ month: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][i], value: 4000 + Math.random()*7000 }))}>
                           <XAxis dataKey="month" />
                           <YAxis />
                           <Tooltip />
-                          <Area type="natural" dataKey="value1" stroke="#6366f1" fill="#6366f120" strokeWidth={4} />
-                          <Area type="natural" dataKey="value2" stroke="#f472b6" fill="#f472b620" strokeWidth={4} />
+                          <Area type="natural" dataKey="value" stroke={theme.color} fill={`${theme.color}30`} strokeWidth={4} />
                         </AreaChart>
                       </ResponsiveContainer>
                     </div>
                   </div>
 
-                  {/* Processed Data Sample */}
                   <div className="bg-[#111620] p-7 rounded-3xl border border-white/10">
-                    <h3 className="text-white font-bold text-lg mb-5">Processed Data Sample</h3>
+                    <div className="flex justify-between items-center mb-5">
+                      <h3 className="text-white font-bold text-lg">Processed Data Sample</h3>
+                      <button onClick={downloadCleanedData} className="bg-emerald-600 hover:bg-emerald-700 px-6 py-2.5 rounded-xl text-sm flex items-center gap-2">
+                        <Download size={18} /> Download Full CSV
+                      </button>
+                    </div>
                     <div className="overflow-x-auto max-h-[460px] border border-white/10 rounded-2xl bg-[#0a0c14]">
                       <table className="w-full text-sm">
                         <thead className="bg-[#0f121a] sticky top-0 z-10">
@@ -256,7 +286,7 @@ export default function ProGenericBIDashboard() {
               </div>
             </div>
           ) : (
-            /* 17-Step Notebook */
+            /* Notebook View */
             <div className="max-w-5xl mx-auto space-y-12 pb-20">
               {data.steps?.map((s: any, index: number) => (
                 <div key={`step-${s.id}-${index}`} className="relative border-l-2 border-white/10 pl-10">
@@ -270,7 +300,7 @@ export default function ProGenericBIDashboard() {
                       <CheckCircle size={18} className="text-emerald-500" /> 
                       STEP {s.id} — {s.title}
                     </h4>
-                    {s.out && <div className="notebook-table mb-8 text-[10px]" dangerouslySetInnerHTML={{ __html: s.out }} />}
+                    {s.out && <div className="notebook-table mb-8 text-[11px]" dangerouslySetInnerHTML={{ __html: s.out }} />}
                     {s.img && (
                       <div className="bg-black/60 p-4 rounded-2xl border border-white/5">
                         <img src={`data:image/png;base64,${s.img}`} className="w-full rounded-xl shadow-2xl" alt={`Step ${s.id}`} />
@@ -288,7 +318,7 @@ export default function ProGenericBIDashboard() {
         <div className="h-[80vh] flex flex-col items-center justify-center text-center">
           <Database size={140} className="mb-10 text-slate-700" />
           <h2 className="text-6xl font-black text-white tracking-tighter">Upload Any Dataset</h2>
-          <p className="text-xl text-slate-500 mt-6 max-w-lg">Get instant professional BI dashboard</p>
+          <p className="text-xl text-slate-500 mt-6 max-w-lg">Get dynamic business intelligence dashboard</p>
         </div>
       )}
     </div>
