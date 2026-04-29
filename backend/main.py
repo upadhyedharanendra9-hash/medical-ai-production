@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import logging
 import gc
+import sys
 from fastapi import FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from sklearn.model_selection import train_test_split
@@ -14,7 +15,7 @@ from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from sklearn.preprocessing import LabelEncoder, StandardScaler
 from sklearn.metrics import accuracy_score, r2_score
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("nexus_kernel")
 
 plt.switch_backend('Agg')
@@ -46,9 +47,16 @@ async def universal_master_pipeline(file: UploadFile = File(...)):
     plt.close('all')
     gc.collect()
     steps = []
+    
+    logger.info(f"=== NEW ANALYSIS STARTED ===")
+    logger.info(f"Received file: {file.filename} | Size: {file.size} bytes")
+    
     try:
         content = await file.read()
+        logger.info("File content read successfully")
+
         df = pd.read_csv(io.BytesIO(content), sep=None, engine='python', on_bad_lines='skip')
+        logger.info(f"DataFrame loaded: {df.shape[0]:,} rows × {df.shape[1]} columns")
 
         def record(sid: int, title: str, cmd: str, out=None, img=None):
             steps.append({
@@ -67,14 +75,17 @@ async def universal_master_pipeline(file: UploadFile = File(...)):
 
         target_candidates = ['target', 'label', 'class', 'status', 'outcome', 'y', 'churn', 'cancel', 'fraud', 'survived', 'cardio']
         target = next((c for c in df.columns if any(k in c.lower() for k in target_candidates)), df.columns[-1])
+        logger.info(f"Target column detected: {target}")
 
         y_series = df[target]
         n_unique = y_series.nunique()
 
         if n_unique <= 10 and pd.api.types.is_numeric_dtype(y_series):
             y_series = y_series.round().astype(int)
+            logger.info("Target converted to integer for classification")
 
         is_classification = n_unique <= 10
+        logger.info(f"Problem Type: {'Classification' if is_classification else 'Regression'} | Unique values: {n_unique}")
 
         record(5, "Target Identification", f"Target = '{target}'", 
                f"Type: {'Classification' if is_classification else 'Regression'} | Unique: {n_unique}")
@@ -135,6 +146,7 @@ async def universal_master_pipeline(file: UploadFile = File(...)):
             metric = "R² Score"
 
         record(14, "Model Training", f"RandomForest({'Classifier' if is_classification else 'Regressor'})", f"{metric}: {score:.4f}")
+        logger.info(f"Model training completed with {metric}: {score:.4f}")
 
         plt.figure(figsize=(10, 6))
         plt.scatter(y_test, preds, alpha=0.6, color='#3b82f6')
@@ -154,6 +166,8 @@ async def universal_master_pipeline(file: UploadFile = File(...)):
         record(17, "Cleaned Dataset Export", "proc_df.to_csv()", 
                "<h3>PROCESSED DATA PREVIEW</h3>" + proc_df.head(10).round(4).to_html(classes='p-table'))
 
+        logger.info("=== ANALYSIS COMPLETED SUCCESSFULLY ===")
+        
         return clean_json({
             "steps": steps,
             "db": {
@@ -176,5 +190,13 @@ async def universal_master_pipeline(file: UploadFile = File(...)):
     except Exception as e:
         plt.close('all')
         gc.collect()
-        logger.error(traceback.format_exc())
-        return {"error": True, "message": str(e), "trace": traceback.format_exc()}
+        error_trace = traceback.format_exc()
+        logger.error(f"ANALYSIS FAILED: {str(e)}")
+        logger.error(error_trace)
+        
+        return {
+            "error": True,
+            "message": str(e),
+            "trace": error_trace,
+            "steps": steps
+        }
