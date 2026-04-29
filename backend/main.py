@@ -7,7 +7,6 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import logging
 import gc
-import sys
 from fastapi import FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from sklearn.model_selection import train_test_split
@@ -42,21 +41,44 @@ def get_b64():
     plt.close()
     return base64.b64encode(buf.getvalue()).decode('utf-8')
 
+def read_csv_with_encoding(content):
+    encodings = ['utf-8', 'utf-16', 'utf-8-sig', 'iso-8859-1', 'cp1252']
+    for enc in encodings:
+        try:
+            df = pd.read_csv(io.BytesIO(content), sep=None, engine='python', on_bad_lines='skip', encoding=enc)
+            logger.info(f"CSV read successfully with encoding: {enc}")
+            return df
+        except Exception:
+            continue
+    logger.warning("All encodings failed, using error replace")
+    return pd.read_csv(io.BytesIO(content), sep=None, engine='python', on_bad_lines='skip', encoding_errors='replace')
+
+def detect_business_type(filename: str, target_col: str, columns):
+    text = (filename + " " + target_col + " " + " ".join(columns)).lower()
+    if any(word in text for word in ['superstore', 'order', 'sales', 'profit', 'ship', 'customer', 'retail', 'store']):
+        return "retail"
+    elif any(word in text for word in ['cardio', 'disease', 'health', 'medical', 'patient', 'hospital', 'heart']):
+        return "healthcare"
+    elif any(word in text for word in ['cancel', 'churn', 'subscription', 'user', 'saas']):
+        return "saas"
+    elif any(word in text for word in ['ecommerce', 'product', 'category', 'revenue', 'cart']):
+        return "ecommerce"
+    return "general"
+
 @app.post("/analyze")
 async def universal_master_pipeline(file: UploadFile = File(...)):
     plt.close('all')
     gc.collect()
     steps = []
     
-    logger.info(f"=== NEW ANALYSIS STARTED ===")
-    logger.info(f"Received file: {file.filename} | Size: {file.size} bytes")
+    logger.info(f"=== NEW ANALYSIS STARTED: {file.filename} ===")
     
     try:
         content = await file.read()
-        logger.info("File content read successfully")
+        df = read_csv_with_encoding(content)
 
-        df = pd.read_csv(io.BytesIO(content), sep=None, engine='python', on_bad_lines='skip')
-        logger.info(f"DataFrame loaded: {df.shape[0]:,} rows × {df.shape[1]} columns")
+        business_type = detect_business_type(file.filename, "", df.columns)
+        logger.info(f"Detected business type: {business_type}")
 
         def record(sid: int, title: str, cmd: str, out=None, img=None):
             steps.append({
@@ -68,24 +90,21 @@ async def universal_master_pipeline(file: UploadFile = File(...)):
                 "pct": int((sid / 17) * 100)
             })
 
-        record(1, "Kernel Boot", "sys.init()", "Universal Logic Locked.")
-        record(2, "Data Ingestion", "pd.read_csv()", df.head(5).to_html(classes='p-table'))
+        record(1, "Kernel Boot", "sys.init()", "Universal Analysis Engine Started")
+        record(2, "Data Ingestion", "pd.read_csv()", df.head(8).to_html(classes='notebook-table', border=0))
         record(3, "Schema Discovery", "df.info()", f"{df.shape[0]:,} rows × {df.shape[1]} columns")
-        record(4, "Integrity Audit", "df.isnull().sum()", df.isnull().sum().to_frame(name='Missing').to_html(classes='p-table'))
+        record(4, "Integrity Audit", "Missing Values Check", df.isnull().sum().to_frame(name='Missing Count').to_html(classes='notebook-table', border=0))
 
-        target_candidates = ['target', 'label', 'class', 'status', 'outcome', 'y', 'churn', 'cancel', 'fraud', 'survived', 'cardio']
+        target_candidates = ['target', 'label', 'class', 'status', 'outcome', 'y', 'churn', 'cancel', 'fraud', 'survived', 'cardio', 'is_cancel']
         target = next((c for c in df.columns if any(k in c.lower() for k in target_candidates)), df.columns[-1])
-        logger.info(f"Target column detected: {target}")
 
         y_series = df[target]
         n_unique = y_series.nunique()
 
         if n_unique <= 10 and pd.api.types.is_numeric_dtype(y_series):
             y_series = y_series.round().astype(int)
-            logger.info("Target converted to integer for classification")
 
         is_classification = n_unique <= 10
-        logger.info(f"Problem Type: {'Classification' if is_classification else 'Regression'} | Unique values: {n_unique}")
 
         record(5, "Target Identification", f"Target = '{target}'", 
                f"Type: {'Classification' if is_classification else 'Regression'} | Unique: {n_unique}")
@@ -97,7 +116,7 @@ async def universal_master_pipeline(file: UploadFile = File(...)):
             sns.histplot(df[target], kde=True, color='#3b82f6')
         record(6, "Target Distribution", f"Distribution of {target}", img=get_b64())
 
-        record(7, "Descriptive Stats", "df.describe()", df.describe(include='all').round(3).to_html(classes='p-table'))
+        record(7, "Descriptive Stats", "df.describe()", df.describe(include='all').round(3).to_html(classes='notebook-table', border=0))
 
         plt.figure(figsize=(11, 7))
         numeric_df = df.select_dtypes(include=[np.number])
@@ -111,28 +130,28 @@ async def universal_master_pipeline(file: UploadFile = File(...)):
 
         proc_df[num_cols] = proc_df[num_cols].fillna(proc_df[num_cols].median())
         proc_df[cat_cols] = proc_df[cat_cols].fillna("Missing")
-        record(9, "Imputation", "fillna(median/mode)", "Missing values handled.")
+        record(9, "Imputation", "Missing Value Handling", "Applied median for numeric & 'Missing' for categorical")
 
         for col in cat_cols:
             le = LabelEncoder()
             proc_df[col] = le.fit_transform(proc_df[col].astype(str))
-        record(10, "Label Encoding", "LabelEncoder()", f"{len(cat_cols)} columns encoded.")
+        record(10, "Label Encoding", "Categorical Encoding", f"{len(cat_cols)} categorical columns encoded")
 
         if num_cols:
             scaler = StandardScaler()
             proc_df[num_cols] = scaler.fit_transform(proc_df[num_cols])
-        record(11, "Feature Scaling", "StandardScaler()", "Numeric features normalized.")
+        record(11, "Feature Scaling", "StandardScaler", "Numeric features standardized")
 
         if num_cols:
             plt.figure(figsize=(12, 5))
             proc_df[num_cols[:min(5, len(num_cols))]].boxplot()
-            record(12, "Outlier Analysis", "Boxplot", img=get_b64())
+            record(12, "Outlier Analysis", "Box Plot", img=get_b64())
 
         X = proc_df.drop(columns=[target])
         y = y_series if is_classification else proc_df[target]
 
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42)
-        record(13, "Data Partitioning", "train_test_split(0.25)", f"Train: {len(X_train)} | Test: {len(X_test)}")
+        record(13, "Data Partitioning", "train_test_split", f"Train: {len(X_train)} | Test: {len(X_test)}")
 
         if is_classification:
             model = RandomForestClassifier(n_estimators=200, random_state=42, n_jobs=-1)
@@ -146,14 +165,13 @@ async def universal_master_pipeline(file: UploadFile = File(...)):
             metric = "R² Score"
 
         record(14, "Model Training", f"RandomForest({'Classifier' if is_classification else 'Regressor'})", f"{metric}: {score:.4f}")
-        logger.info(f"Model training completed with {metric}: {score:.4f}")
 
         plt.figure(figsize=(10, 6))
         plt.scatter(y_test, preds, alpha=0.6, color='#3b82f6')
         plt.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], 'r--')
         record(15, "Validation Plot", "Actual vs Predicted", img=get_b64())
 
-        record(16, "Benchmarking", "Evaluation", f"Final {metric}: {score:.4f}")
+        record(16, "Benchmarking", "Model Evaluation", f"Final {metric}: {score:.4f}")
 
         imp = sorted([{"name": col, "val": float(val)} for col, val in zip(X.columns, model.feature_importances_)], 
                      key=lambda x: x['val'], reverse=True)[:10]
@@ -164,10 +182,11 @@ async def universal_master_pipeline(file: UploadFile = File(...)):
         record(17, "Feature Importance", "Top 10 Drivers", img=get_b64())
 
         record(17, "Cleaned Dataset Export", "proc_df.to_csv()", 
-               "<h3>PROCESSED DATA PREVIEW</h3>" + proc_df.head(10).round(4).to_html(classes='p-table'))
+               "<h3 style='color:#60a5fa; margin-bottom:12px;'>PROCESSED & CLEANED DATA PREVIEW</h3>" + 
+               proc_df.head(15).round(4).to_html(classes='notebook-table', border=0, index=False))
 
         logger.info("=== ANALYSIS COMPLETED SUCCESSFULLY ===")
-        
+
         return clean_json({
             "steps": steps,
             "db": {
@@ -181,22 +200,16 @@ async def universal_master_pipeline(file: UploadFile = File(...)):
                 "importance": imp,
                 "strategy": [
                     {"t": "Key Driver", "d": f"**{imp[0]['name']}** has highest impact."},
-                    {"t": "Data Quality", "d": f"{df.isna().sum().sum()} missing values handled."}
+                    {"t": "Data Quality", "d": f"Missing values handled successfully."}
                 ],
-                "processed": proc_df.head(10).round(4).to_dict(orient='records')
+                "processed": proc_df.head(20).round(4).to_dict(orient='records'),
+                "cleaned_csv": proc_df.to_csv(index=False),
+                "business_type": business_type
             }
         })
 
     except Exception as e:
         plt.close('all')
         gc.collect()
-        error_trace = traceback.format_exc()
         logger.error(f"ANALYSIS FAILED: {str(e)}")
-        logger.error(error_trace)
-        
-        return {
-            "error": True,
-            "message": str(e),
-            "trace": error_trace,
-            "steps": steps
-        }
+        return {"error": True, "message": str(e), "trace": traceback.format_exc(), "steps": steps}
