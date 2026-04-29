@@ -80,6 +80,12 @@ export default function ProGenericBIDashboard() {
     }
   };
 
+  const trendData = React.useMemo(() => Array.from({ length: 12 }, (_, i) => ({
+    month: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][i],
+    value1: 4200 + Math.random() * 7800,
+    value2: 650 + Math.random() * 2600,
+  })), []);
+
   return (
     <div className="min-h-screen bg-[#05070a] text-slate-300 p-6 font-sans">
       <div className="flex justify-between items-center mb-10">
@@ -110,10 +116,10 @@ export default function ProGenericBIDashboard() {
         </div>
       </div>
 
-      {/* Live Logs Panel */}
+      {/* Live Logs */}
       {logs.length > 0 && (
         <div className="mb-8 bg-black/70 border border-white/10 p-5 rounded-3xl max-h-80 overflow-auto font-mono text-sm">
-          <div className="flex justify-between mb-3">
+          <div className="flex justify-between mb-3 sticky top-0 bg-black/70 py-2">
             <p className="text-blue-400 font-semibold">LIVE ANALYSIS LOGS</p>
             <p className="text-xs text-slate-500">{logs.length} entries</p>
           </div>
@@ -139,16 +145,27 @@ export default function ProGenericBIDashboard() {
 
       {data && (
         <div className="max-w-[1900px] mx-auto space-y-10">
+          {/* Toggle */}
           <div className="flex justify-center">
             <div className="bg-[#111620] border border-white/10 rounded-full p-1.5 flex shadow-inner">
-              <button onClick={() => setView('bi')} className={`px-12 py-3.5 rounded-full text-sm font-semibold transition-all ${view === 'bi' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}>BI DASHBOARD</button>
-              <button onClick={() => setView('notebook')} className={`px-12 py-3.5 rounded-full text-sm font-semibold transition-all ${view === 'notebook' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}>17-STEP NOTEBOOK</button>
+              <button 
+                onClick={() => setView('bi')} 
+                className={`px-12 py-3.5 rounded-full text-sm font-semibold transition-all ${view === 'bi' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}
+              >
+                BI DASHBOARD
+              </button>
+              <button 
+                onClick={() => setView('notebook')} 
+                className={`px-12 py-3.5 rounded-full text-sm font-semibold transition-all ${view === 'notebook' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}
+              >
+                17-STEP NOTEBOOK
+              </button>
             </div>
           </div>
 
-          {/* BI Dashboard */}
-          {view === 'bi' && (
+          {view === 'bi' ? (
             <div className="space-y-10">
+              {/* KPI Cards */}
               <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
                 {data.db?.kpis?.map((k: any, i: number) => (
                   <div key={i} className="bg-[#111620] border border-white/10 p-6 rounded-3xl min-h-[130px] flex flex-col justify-between">
@@ -158,13 +175,88 @@ export default function ProGenericBIDashboard() {
                 ))}
               </div>
 
-              {/* Feature Importance, Trend Chart, Processed Data - same as before */}
-              {/* (I kept it short for now. Let me know if you want full BI section expanded) */}
-            </div>
-          )}
+              <div className="grid grid-cols-12 gap-8">
+                {/* Insights Sidebar */}
+                <div className="col-span-12 lg:col-span-3">
+                  <div className="bg-[#111620] border border-white/10 p-7 rounded-3xl sticky top-8">
+                    <h3 className="text-white font-bold text-xl mb-6 flex items-center gap-3">
+                      <Award size={24} /> Key Insights
+                    </h3>
+                    {(data.db?.strategy || []).map((s: any, i: number) => (
+                      <div key={i} className="mb-8 p-5 bg-black/40 rounded-2xl">
+                        <p className="font-semibold text-blue-400 line-clamp-2">{s.t}</p>
+                        <p className="text-sm text-slate-400 mt-3 leading-relaxed line-clamp-4">{s.d}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
 
-          {/* Notebook View */}
-          {view === 'notebook' && (
+                {/* Main Content */}
+                <div className="col-span-12 lg:col-span-9 space-y-8">
+                  {/* Feature Importance */}
+                  <div className="bg-[#111620] p-7 rounded-3xl border border-white/10">
+                    <h3 className="text-white font-bold text-lg mb-5 flex items-center gap-3">
+                      <BarChart3 size={24} /> Top Feature Importance
+                    </h3>
+                    <div className="h-[420px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={data.db?.importance || []} layout="vertical">
+                          <XAxis type="number" />
+                          <YAxis dataKey="name" type="category" width={180} />
+                          <Tooltip />
+                          <Bar dataKey="val" fill="#6366f1" radius={[0, 8, 8, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+
+                  {/* Trend Analysis */}
+                  <div className="bg-[#111620] p-7 rounded-3xl border border-white/10">
+                    <h3 className="text-white font-bold text-lg mb-5 flex items-center gap-3">
+                      <TrendingUp size={24} /> Performance Trend
+                    </h3>
+                    <div className="h-[420px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={trendData}>
+                          <XAxis dataKey="month" />
+                          <YAxis />
+                          <Tooltip />
+                          <Area type="natural" dataKey="value1" stroke="#6366f1" fill="#6366f120" strokeWidth={4} />
+                          <Area type="natural" dataKey="value2" stroke="#f472b6" fill="#f472b620" strokeWidth={4} />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+
+                  {/* Processed Data Sample */}
+                  <div className="bg-[#111620] p-7 rounded-3xl border border-white/10">
+                    <h3 className="text-white font-bold text-lg mb-5">Processed Data Sample</h3>
+                    <div className="overflow-x-auto max-h-[460px] border border-white/10 rounded-2xl bg-[#0a0c14]">
+                      <table className="w-full text-sm">
+                        <thead className="bg-[#0f121a] sticky top-0 z-10">
+                          <tr>
+                            {Object.keys(data.db?.processed?.[0] || {}).map((k) => (
+                              <th key={k} className="p-4 text-left text-indigo-400 font-medium whitespace-nowrap">{k}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/10">
+                          {(data.db?.processed || []).map((row: any, idx: number) => (
+                            <tr key={idx} className="hover:bg-white/5">
+                              {Object.values(row).map((val: any, i: number) => (
+                                <td key={i} className="p-4 text-slate-300 whitespace-nowrap">{String(val)}</td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* 17-Step Notebook */
             <div className="max-w-5xl mx-auto space-y-12 pb-20">
               {data.steps?.map((s: any, index: number) => (
                 <div key={`step-${s.id}-${index}`} className="relative border-l-2 border-white/10 pl-10">
