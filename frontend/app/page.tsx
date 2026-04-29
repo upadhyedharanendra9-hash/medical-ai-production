@@ -1,7 +1,7 @@
 "use client";
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
-import { Database, Activity, CheckCircle, AlertCircle, Loader2, Target, TrendingUp, BarChart3, Award } from 'lucide-react';
+import { Database, Activity, CheckCircle, Loader2, Award, BarChart3, TrendingUp } from 'lucide-react';
 
 export default function ProGenericBIDashboard() {
   const [data, setData] = useState<any>(null);
@@ -9,7 +9,7 @@ export default function ProGenericBIDashboard() {
   const [view, setView] = useState<'bi' | 'notebook'>('bi');
   const [error, setError] = useState<string | null>(null);
 
-  const BACKEND_URL = "https://medical-ai-production-jjxr.onrender.com";
+  const BACKEND_URL = "https://terrific-emotion-production.up.railway.app";
 
   const onUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -23,7 +23,11 @@ export default function ProGenericBIDashboard() {
     fd.append("file", file);
 
     try {
-      const res = await fetch(`${BACKEND_URL}/analyze`, { method: "POST", body: fd });
+      const res = await fetch(`${BACKEND_URL}/analyze`, { 
+        method: "POST", 
+        body: fd 
+      });
+
       const result = await res.json();
 
       if (result.error) {
@@ -32,7 +36,7 @@ export default function ProGenericBIDashboard() {
         setData(result);
       }
     } catch (err: any) {
-      setError("Cannot connect to backend. Please try again.");
+      setError("Cannot connect to backend. Please check if Railway service is running.");
     } finally {
       setLoading(false);
     }
@@ -46,7 +50,6 @@ export default function ProGenericBIDashboard() {
 
   return (
     <div className="min-h-screen bg-[#05070a] text-slate-300 p-6 font-sans">
-      {/* Header */}
       <div className="flex justify-between items-center mb-10">
         <div className="flex items-center gap-5">
           <div className="bg-gradient-to-br from-blue-600 to-violet-600 p-4 rounded-2xl">
@@ -81,7 +84,6 @@ export default function ProGenericBIDashboard() {
 
       {data ? (
         <div className="max-w-[1900px] mx-auto space-y-10">
-          {/* Toggle */}
           <div className="flex justify-center">
             <div className="bg-[#111620] border border-white/10 rounded-full p-1.5 flex shadow-inner">
               <button 
@@ -101,7 +103,6 @@ export default function ProGenericBIDashboard() {
 
           {view === 'bi' ? (
             <div className="space-y-10">
-              {/* KPI Cards */}
               <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
                 {data.db?.kpis?.map((k: any, i: number) => (
                   <div key={i} className="bg-[#111620] border border-white/10 p-6 rounded-3xl min-h-[130px] flex flex-col justify-between">
@@ -112,7 +113,6 @@ export default function ProGenericBIDashboard() {
               </div>
 
               <div className="grid grid-cols-12 gap-8">
-                {/* Insights Sidebar */}
                 <div className="col-span-12 lg:col-span-3">
                   <div className="bg-[#111620] border border-white/10 p-7 rounded-3xl sticky top-8">
                     <h3 className="text-white font-bold text-xl mb-6 flex items-center gap-3">
@@ -127,9 +127,7 @@ export default function ProGenericBIDashboard() {
                   </div>
                 </div>
 
-                {/* Main Content */}
                 <div className="col-span-12 lg:col-span-9 space-y-8">
-                  {/* Feature Importance */}
                   <div className="bg-[#111620] p-7 rounded-3xl border border-white/10">
                     <h3 className="text-white font-bold text-lg mb-5 flex items-center gap-3">
                       <BarChart3 size={24} /> Top Feature Importance
@@ -146,7 +144,6 @@ export default function ProGenericBIDashboard() {
                     </div>
                   </div>
 
-                  {/* Trend Analysis */}
                   <div className="bg-[#111620] p-7 rounded-3xl border border-white/10">
                     <h3 className="text-white font-bold text-lg mb-5 flex items-center gap-3">
                       <TrendingUp size={24} /> Performance Trend
@@ -164,7 +161,6 @@ export default function ProGenericBIDashboard() {
                     </div>
                   </div>
 
-                  {/* Processed Data */}
                   <div className="bg-[#111620] p-7 rounded-3xl border border-white/10">
                     <h3 className="text-white font-bold text-lg mb-5">Processed Data Sample</h3>
                     <div className="overflow-x-auto max-h-[460px] border border-white/10 rounded-2xl bg-[#0a0c14]">
@@ -192,7 +188,6 @@ export default function ProGenericBIDashboard() {
               </div>
             </div>
           ) : (
-            /* 17-Step Notebook - Locked */
             <div className="max-w-5xl mx-auto space-y-12 pb-20">
               {data.steps?.map((s: any, index: number) => (
                 <div key={`step-${s.id}-${index}`} className="relative border-l-2 border-white/10 pl-10">
