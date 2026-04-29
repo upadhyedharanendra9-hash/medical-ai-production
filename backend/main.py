@@ -65,7 +65,6 @@ async def universal_master_pipeline(file: UploadFile = File(...)):
         record(3, "Schema Discovery", "df.info()", f"{df.shape[0]:,} rows × {df.shape[1]} columns")
         record(4, "Integrity Audit", "df.isnull().sum()", df.isnull().sum().to_frame(name='Missing').to_html(classes='p-table'))
 
-        # Target Detection
         target_candidates = ['target', 'label', 'class', 'status', 'outcome', 'y', 'churn', 'cancel', 'fraud', 'survived', 'cardio']
         target = next((c for c in df.columns if any(k in c.lower() for k in target_candidates)), df.columns[-1])
 
@@ -80,7 +79,6 @@ async def universal_master_pipeline(file: UploadFile = File(...)):
         record(5, "Target Identification", f"Target = '{target}'", 
                f"Type: {'Classification' if is_classification else 'Regression'} | Unique: {n_unique}")
 
-        # Target Distribution
         plt.figure(figsize=(10, 5))
         if is_classification:
             sns.countplot(y=y_series.astype(str), hue=y_series.astype(str), palette='Blues', legend=False)
@@ -96,7 +94,6 @@ async def universal_master_pipeline(file: UploadFile = File(...)):
             sns.heatmap(numeric_df.corr(), cmap='Blues', annot=False)
         record(8, "Correlation Matrix", "sns.heatmap()", img=get_b64())
 
-        # Preprocessing
         proc_df = df.copy()
         num_cols = proc_df.select_dtypes(include=[np.number]).columns.tolist()
         cat_cols = proc_df.select_dtypes(exclude=[np.number]).columns.tolist()
